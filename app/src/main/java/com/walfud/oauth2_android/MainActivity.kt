@@ -5,9 +5,10 @@ import android.content.Intent
 import android.os.Bundle
 import com.google.gson.Gson
 import com.walfud.walle.algorithm.hash.HashUtils
-import kotlinx.coroutines.experimental.CommonPool
-import kotlinx.coroutines.experimental.async
-import okhttp3.*
+import okhttp3.HttpUrl
+import okhttp3.MediaType
+import okhttp3.Request
+import okhttp3.RequestBody
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
 import java.io.Serializable
@@ -15,28 +16,28 @@ import java.io.Serializable
 
 class MainActivity : Activity(), AnkoLogger {
 
-    companion object {
-        val EXTRA_TOKEN: String = "EXTRA_TOKEN"
-
-        val EXTRA_OID: String = "EXTRA_OID"
-    }
-
-    val mOkHttpClient: OkHttpClient = OkHttpClient.Builder()
-            .build()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!intent.hasExtra(EXTRA_TOKEN)) {
-            MainActivityUI().setContentView(this)
-        } else {
-            MainActivityTokenUI().setContentView(this)
+        MainActivityUI().setContentView(this)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        when (requestCode) {
+            OAuth2Activity.ID_REQUEST -> {
+                if (resultCode == RESULT_OK) {
+                    val tokenResponseBean = data?.getSerializableExtra(OAuth2Activity.EXTRA_TOKEN_RESPONSE_BEAN) as TokenResponseBean
+                    toast(tokenResponseBean.accessToken)
+                }
+            }
         }
     }
 
     fun login(username: String, password: String): LoginResponseBean {
         val loginRequestBean = LoginRequestBean(username,
                 HashUtils.md5(password))
-        val loginResponse = mOkHttpClient.newCall(Request.Builder()
+        val loginResponse = OAuth2Application.okHttpClient.newCall(Request.Builder()
                 .url("http://oauth2.walfud.com/login")
                 .post(RequestBody.create(MediaType.parse("application/json; charset=utf-8"),
                         Gson().toJson(loginRequestBean)))
@@ -48,7 +49,7 @@ class MainActivity : Activity(), AnkoLogger {
     }
 
     fun user(token: String): UserResponseBean {
-        val userResponse = mOkHttpClient.newCall(Request.Builder()
+        val userResponse = OAuth2Application.okHttpClient.newCall(Request.Builder()
                 .url(HttpUrl.Builder()
                         .scheme("http")
                         .host("oauth2.walfud.com")
@@ -62,13 +63,6 @@ class MainActivity : Activity(), AnkoLogger {
 
         return Gson().fromJson(userResponse.body().string(), UserResponseBean::class.java)
     }
-
-    fun finish(oid: String) {
-        val intent = Intent()
-        intent.putExtra(EXTRA_OID, oid)
-        setResult(RESULT_OK, intent)
-        finish()
-    }
 }
 
 class MainActivityUI : AnkoComponent<MainActivity> {
@@ -78,30 +72,14 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             val password = editText()
             button(R.string.main_login) {
                 onClick {
-                    with(ui.owner) {
-                        val userResponseBean = async(CommonPool) {
-                            val loginResponseBean = login(username.text.toString(), password.text.toString())
-                            user(loginResponseBean.token)
-                        }
-                        toast(userResponseBean.await().oid)
-                    }
-                }
-            }
-        }
-    }
-}
-
-class MainActivityTokenUI : AnkoComponent<MainActivity> {
-    override fun createView(ui: AnkoContext<MainActivity>) = with(ui) {
-        verticalLayout {
-            button(R.string.main_authorize) {
-                onClick {
-                    with(ui.owner) {
-                        val userResponseBean = async(CommonPool) {
-                            user(intent.getStringExtra(MainActivity.EXTRA_TOKEN))
-                        }
-                        finish(userResponseBean.await().oid)
-                    }
+//                    with(ui.owner) {
+//                        val userResponseBean = async(CommonPool) {
+//                            val loginResponseBean = login(username.text.toString(), password.text.toString())
+//                            user(loginResponseBean.token)
+//                        }
+//                        toast(userResponseBean.await().oid)
+//                    }
+                    OAuth2Activity.startActivityForResult(ui.owner, "")
                 }
             }
         }
