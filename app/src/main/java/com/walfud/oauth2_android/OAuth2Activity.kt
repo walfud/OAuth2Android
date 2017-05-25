@@ -4,16 +4,11 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.experimental.android.UI
 import kotlinx.coroutines.experimental.launch
-import okhttp3.FormBody
-import okhttp3.HttpUrl
-import okhttp3.Request
 import org.jetbrains.anko.*
 import org.jetbrains.anko.coroutines.experimental.bg
 import org.jetbrains.anko.sdk25.coroutines.onClick
-import java.io.Serializable
 
 /**
  * Created by walfud on 22/05/2017.
@@ -42,13 +37,13 @@ class OAuth2Activity : BaseActivity() {
     }
 
     fun performOAuth2() {
-        val dialog = progressDialog(message = "a moment please...")
+        val dialog = progressDialog(message = "OAuthorizing...")
         launch(UI) {
             try {
                 val oauth = bg {
                     val clientId = intent.getStringExtra(EXTRA_CLIENT_ID)
-                    val authorizeResponseBean = authorize(clientId)
-                    token(clientId, Uri.parse(authorizeResponseBean.cb), authorizeResponseBean.code)
+                    val authorizeResponseBean = authorize(getToken(), clientId)
+                    token(getToken(), clientId, Uri.parse(authorizeResponseBean.cb), authorizeResponseBean.code)
                 }.await()
                 finish(null, bundleOf(EXTRA_TOKEN_RESPONSE_BEAN to oauth))
             } catch (e: Exception) {
@@ -57,42 +52,6 @@ class OAuth2Activity : BaseActivity() {
                 dialog.dismiss()
             }
         }
-    }
-
-    fun authorize(clientId: String, redirectUri: Uri = Uri.EMPTY, scope: String = "", state: String = ""): AuthorizeResponseBean {
-        val authorizeResponse = OAuth2Application.okHttpClient.newCall(Request.Builder()
-                .url(HttpUrl.Builder()
-                        .scheme("http")
-                        .host("oauth2.walfud.com")
-                        .addPathSegment("authorize")
-                        .addQueryParameter("response_type", "code")
-                        .addQueryParameter("client_id", clientId)
-                        .addQueryParameter("redirect_uri", redirectUri.toString())
-                        .addQueryParameter("scope", scope)
-                        .addQueryParameter("state", state)
-                        .build())
-                .get()
-                .build())
-                .execute()
-        if (!authorizeResponse.isSuccessful) throw RuntimeException("authorize fail")
-
-        return getResponse(authorizeResponse.body().string(), AuthorizeResponseBean::class.java)
-    }
-
-    fun token(clientId: String, redirectUri: Uri = Uri.EMPTY, code: String): TokenResponseBean {
-        val tokenResponse = OAuth2Application.okHttpClient.newCall(Request.Builder()
-                .url(redirectUri.toString())
-                .post(FormBody.Builder()
-                        .add("grant_type", "authorization_code")
-                        .add("client_id", clientId)
-                        .add("redirect_uri", redirectUri.toString())
-                        .add("code", code)
-                        .build())
-                .build())
-                .execute()
-        if (!tokenResponse.isSuccessful) throw RuntimeException("token fail")
-
-        return getResponse(tokenResponse.body().string(), TokenResponseBean::class.java)
     }
 }
 
@@ -109,16 +68,3 @@ class OAuth2ActivityUI : AnkoComponent<OAuth2Activity> {
         }
     }
 }
-
-data class AuthorizeResponseBean(
-        val code: String,
-        val state: String,
-        val cb: String
-)
-
-data class TokenResponseBean(
-        @SerializedName("access_token") val accessToken: String,
-        @SerializedName("refresh_token") val refreshToken: String,
-        @SerializedName("expires_in") val expiresIn: Long,
-        @SerializedName("token_type") val tokenType: String
-) : Serializable

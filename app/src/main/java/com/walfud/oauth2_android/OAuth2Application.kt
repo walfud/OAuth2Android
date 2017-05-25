@@ -13,16 +13,6 @@ class OAuth2Application : Application(), AnkoLogger {
 
     companion object {
         val okHttpClient: OkHttpClient = OkHttpClient.Builder()
-                .addInterceptor { chain ->
-                    val request = chain.request()
-                    if (request.url().pathSegments().isNotEmpty()
-                            && request.url().pathSegments()[0].equals("login")) {
-                        // Pass login api
-                        chain.proceed(request)
-                    } else {
-                        chain.proceed(request.newBuilder().header("X-Access-Token", getToken()).build())
-                    }
-                }
                 .build()
         var context: Context? = null
     }
