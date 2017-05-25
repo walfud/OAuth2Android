@@ -3,20 +3,15 @@ package com.walfud.oauth2_android
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.text.TextUtils
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import com.walfud.walle.algorithm.hash.HashUtils
-import kotlinx.coroutines.experimental.CommonPool
-import kotlinx.coroutines.experimental.async
 import okhttp3.HttpUrl
 import okhttp3.MediaType
 import okhttp3.Request
 import okhttp3.RequestBody
 import org.jetbrains.anko.*
+import org.jetbrains.anko.coroutines.experimental.bg
 import org.jetbrains.anko.sdk25.coroutines.onClick
-import org.json.JSONObject
-import java.io.Serializable
 
 
 class MainActivity : Activity(), AnkoLogger {
@@ -34,6 +29,8 @@ class MainActivity : Activity(), AnkoLogger {
                 if (resultCode == RESULT_OK) {
                     val tokenResponseBean = data?.getSerializableExtra(OAuth2Activity.EXTRA_TOKEN_RESPONSE_BEAN) as TokenResponseBean
                     toast(tokenResponseBean.accessToken)
+                } else {
+                    toast(data?.getStringExtra(OAuth2Activity.EXTRA_ERROR) ?: "")
                 }
             }
         }
@@ -53,7 +50,7 @@ class MainActivity : Activity(), AnkoLogger {
         return getResponse(loginResponse.body().string(), LoginResponseBean::class.java)
     }
 
-    fun user(token: String): UserResponseBean {
+    fun user(): UserResponseBean {
         val userResponse = OAuth2Application.okHttpClient.newCall(Request.Builder()
                 .url(HttpUrl.Builder()
                         .scheme("http")
@@ -61,7 +58,6 @@ class MainActivity : Activity(), AnkoLogger {
                         .addPathSegment("user")
                         .build())
                 .get()
-                .header("X-Access-Token", token)
                 .build())
                 .execute()
         if (!userResponse.isSuccessful) throw RuntimeException("fetch user fail")
@@ -78,38 +74,29 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             button(R.string.main_login) {
                 onClick {
                     with(ui.owner) {
-                        val userResponse = async(CommonPool) {
-                            val loginResponseBean = login(username.text.toString(), HashUtils.md5(password.text.toString()))
-                            user(loginResponseBean.accessToken)
-                        }
                         try {
+                            val username = username.text.toString()
+                            val password = password.text.toString()
+                            val loginResponse = bg { login(username, HashUtils.md5(password)) }
+                            val loginResponseBean = loginResponse.await()
+                            setToken(loginResponseBean.accessToken)
+
+                            val userResponse = bg { user() }
                             val userResponseBean = userResponse.await()
                             toast(userResponseBean.oid)
                         } catch (e: Exception) {
-                            toast(e.message?:"Unknown Error")
+                            toast(e.message ?: "Unknown Error")
                         }
+                    }
+                }
+            }
+            button("Test") {
+                onClick {
+                    with(ui.owner) {
+                        OAuth2Activity.startActivityForResult(ui.owner, "contactsync")
                     }
                 }
             }
         }
     }
 }
-
-fun <T> getResponse(responseBody: String, clazz: Class<T>): T {
-    val json = JSONObject(responseBody)
-    val err = json.optString("err")
-    if (TextUtils.isEmpty(err)) {
-        return Gson().fromJson(responseBody, clazz)
-    }
-
-    throw RuntimeException(err)
-}
-
-data class ErrorResponse(val err: String?)
-data class LoginRequestBean(val username: String, val password: String)
-data class LoginResponseBean(
-        @SerializedName("access_token") val accessToken: String,
-        @SerializedName("refresh_token") val refreshToken: String
-)
-
-data class UserResponseBean(val oid: String) : Serializable
