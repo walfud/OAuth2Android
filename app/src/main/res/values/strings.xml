@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name">OAuth2-Android</string>
-    <string name="main_login">Login</string>
-    <string name="main_authorize">Authorize</string>
+
+    <string name="login_login">Login</string>
+    <string name="oauth2_authorize">Authorize</string>
+
+    <!--Test Only-->
+    <string name="main_user_cancel">User Cancel</string>
 </resources>

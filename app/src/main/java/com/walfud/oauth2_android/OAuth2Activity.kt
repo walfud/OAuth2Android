@@ -1,45 +1,48 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
-import android.app.Dialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.text.TextUtils
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.experimental.android.UI
 import kotlinx.coroutines.experimental.launch
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.Request
-import org.jetbrains.anko.AnkoLogger
+import org.jetbrains.anko.*
 import org.jetbrains.anko.coroutines.experimental.bg
-import org.jetbrains.anko.progressDialog
+import org.jetbrains.anko.sdk25.coroutines.onClick
 import java.io.Serializable
 
 /**
  * Created by walfud on 22/05/2017.
  */
 
-class OAuth2Activity : Activity(), AnkoLogger {
+class OAuth2Activity : BaseActivity() {
 
     companion object {
         val EXTRA_CLIENT_ID: String = "EXTRA_CLIENT_ID"
-        val ID_REQUEST = 1
-        val EXTRA_ERROR: String = "EXTRA_ERROR"
         val EXTRA_TOKEN_RESPONSE_BEAN: String = "EXTRA_TOKEN_RESPONSE_BEAN"
 
-        fun startActivityForResult(activity: Activity, clientId: String) {
+        fun startActivityForResult(activity: Activity, requestId: Int, clientId: String) {
             val intent = Intent(activity, OAuth2Activity::class.java)
             intent.putExtra(EXTRA_CLIENT_ID, clientId)
-            activity.startActivityForResult(intent, ID_REQUEST)
+            activity.startActivityForResult(intent, requestId)
         }
     }
 
-    private var mDialog: Dialog? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        progressDialog(message = "a moment please...")
+        OAuth2ActivityUI().setContentView(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+    }
+
+    fun performOAuth2() {
+        val dialog = progressDialog(message = "a moment please...")
         launch(UI) {
             try {
                 val oauth = bg {
@@ -47,16 +50,13 @@ class OAuth2Activity : Activity(), AnkoLogger {
                     val authorizeResponseBean = authorize(clientId)
                     token(clientId, Uri.parse(authorizeResponseBean.cb), authorizeResponseBean.code)
                 }.await()
-                finish(null, oauth)
+                finish(null, bundleOf(EXTRA_TOKEN_RESPONSE_BEAN to oauth))
             } catch (e: Exception) {
                 finish(e.message, null)
+            } finally {
+                dialog.dismiss()
             }
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mDialog?.dismiss()
     }
 
     fun authorize(clientId: String, redirectUri: Uri = Uri.EMPTY, scope: String = "", state: String = ""): AuthorizeResponseBean {
@@ -94,18 +94,19 @@ class OAuth2Activity : Activity(), AnkoLogger {
 
         return getResponse(tokenResponse.body().string(), TokenResponseBean::class.java)
     }
+}
 
-
-    fun finish(err: String?, tokenResponseBean: TokenResponseBean?) {
-        val intent = Intent()
-        if (!TextUtils.isEmpty(err)) {
-            intent.putExtra(EXTRA_ERROR, err)
-            setResult(RESULT_CANCELED, intent)
-        } else {
-            intent.putExtra(EXTRA_TOKEN_RESPONSE_BEAN, tokenResponseBean)
-            setResult(RESULT_OK, intent)
+class OAuth2ActivityUI : AnkoComponent<OAuth2Activity> {
+    override fun createView(ui: AnkoContext<OAuth2Activity>) = with(ui) {
+        verticalLayout {
+            button(R.string.oauth2_authorize) {
+                onClick {
+                    with(ui.owner) {
+                        performOAuth2()
+                    }
+                }
+            }
         }
-        finish()
     }
 }
 
