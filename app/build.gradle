@@ -8,7 +8,7 @@ android {
     buildToolsVersion "25.0.2"
     defaultConfig {
         applicationId "com.walfud.oauth2_android"
-        minSdkVersion 24
+        minSdkVersion 21
         targetSdkVersion 25
         versionCode 1
         versionName "1.0"
@@ -18,6 +18,11 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+
+    compileOptions {
+        targetCompatibility 1.8
+        sourceCompatibility 1.8
     }
 }
 
@@ -29,11 +34,7 @@ dependencies {
         exclude group: 'com.google.android', module: 'android'
     }
 
-    compile 'com.walfud:walle:2.0.1'
-}
-repositories {
-    mavenLocal()
-    mavenCentral()
+    compile 'com.walfud:walle:2.0.2'
 }
 
 kotlin {
