@@ -1,6 +1,6 @@
 package com.walfud.oauth2_android
 
-import android.app.Activity
+import android.arch.lifecycle.LifecycleActivity
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
@@ -10,7 +10,7 @@ import org.jetbrains.anko.AnkoLogger
  * Created by walfud on 25/05/2017.
  */
 
-open class BaseActivity : Activity(), AnkoLogger {
+open class BaseActivity : LifecycleActivity(), AnkoLogger {
     companion object {
         val EXTRA_ERROR: String = "EXTRA_ERROR"
     }

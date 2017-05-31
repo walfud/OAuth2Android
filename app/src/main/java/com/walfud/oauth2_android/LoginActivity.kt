@@ -1,16 +1,21 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
+import android.arch.lifecycle.MutableLiveData
+import android.arch.lifecycle.Observer
+import android.arch.lifecycle.ViewModel
+import android.arch.lifecycle.ViewModelProviders
 import android.content.Intent
 import android.os.Bundle
-import com.walfud.walle.algorithm.hash.HashUtils
+import kotlinx.coroutines.experimental.android.UI
+import kotlinx.coroutines.experimental.launch
 import org.jetbrains.anko.*
 import org.jetbrains.anko.coroutines.experimental.bg
 import org.jetbrains.anko.sdk25.coroutines.onClick
 
+val EXTRA_LOGIN_RESPONSE_BEAN = "EXTRA_LOGIN_RESPONSE_BEAN"
 
 class LoginActivity : BaseActivity() {
-
     companion object {
         fun startActivityForResult(activity: Activity, requestId: Int) {
             val intent = Intent(activity, LoginActivity::class.java)
@@ -18,40 +23,60 @@ class LoginActivity : BaseActivity() {
         }
     }
 
+    lateinit var viewModel: LoginViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         LoginActivityUI().setContentView(this)
+
+        viewModel = ViewModelProviders.of(this).get(LoginViewModel::class.java)
+        viewModel.err.observe(this, Observer {
+            finish(it!!, null)
+        })
+        viewModel.loginLiveData.observe(this, Observer {
+            finish(null, bundleOf(EXTRA_LOGIN_RESPONSE_BEAN to it!!))
+        })
     }
 }
 
 class LoginActivityUI : AnkoComponent<LoginActivity> {
     override fun createView(ui: AnkoContext<LoginActivity>) = with(ui) {
         verticalLayout {
-            val username = editText()
-            val password = editText()
+            val usernameEt = editText()
+            val passwordEt = editText()
             button(R.string.login_login) {
                 onClick {
-                    with(ui.owner) {
-                        try {
-                            val username = username.text.toString()
-                            val password = password.text.toString()
-                            val loginResponse = bg { login(username, HashUtils.md5(password)) }
-                            val loginResponseBean = loginResponse.await()
-
-                            val userResponse = bg { user(loginResponseBean.accessToken) }
-                            val userResponseBean = userResponse.await()
-
-                            setToken(loginResponseBean.accessToken)
-
-                            finish(null, bundleOf(EXTRA_OID to userResponseBean.oid,
-                                    EXTRA_ACCESS_TOKEN to loginResponseBean.accessToken,
-                                    EXTRA_REFRESH_TOKEN to loginResponseBean.refreshToken))
-                        } catch (e: Exception) {
-                            finish(e.message, null)
-                        }
-                    }
+                    val username = usernameEt.text.toString()
+                    val password = passwordEt.text.toString()
+                    owner.viewModel.login(username, password)
                 }
             }
         }
+    }
+}
+
+class LoginViewModel : ViewModel() {
+    val repository = LoginRepository()
+
+    val err = MutableLiveData<String>()
+    val loginLiveData = MutableLiveData<LoginResponseBean>()
+    fun login(username: String, password: String) {
+        launch(UI) {
+            try {
+                val loginResponseBean = bg {
+                    repository.login(username, password)
+                }.await()
+
+                loginLiveData.value = loginResponseBean
+            } catch (e: Exception) {
+                err.value = e.message
+            }
+        }
+    }
+}
+
+class LoginRepository : BaseRepository() {
+    fun login(username: String, password: String): LoginResponseBean {
+        return network.login(username, password)
     }
 }
