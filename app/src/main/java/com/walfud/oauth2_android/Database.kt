@@ -21,34 +21,6 @@ abstract class Database : RoomDatabase() {
     abstract fun oauth2Dao(): OAuth2Dao
 }
 
-////////// Entity
-@Entity
-data class User(
-        @PrimaryKey
-        var name: String? = null
-)
-
-@Entity
-data class App(
-    @PrimaryKey
-    var name: String? = null
-)
-
-@Entity(foreignKeys = arrayOf(
-        ForeignKey(entity = User::class, parentColumns = arrayOf("name"), childColumns = arrayOf("user_name")),
-        ForeignKey(entity = App::class, parentColumns = arrayOf("name"), childColumns = arrayOf("app_name"))
-))
-data class OAuth2(
-    var user_name: String? = null,
-    var app_name: String? = null,
-
-    @PrimaryKey
-    var oid: String? = null,
-    var accessToken: String? = null,
-    var refreshToken: String? = null
-)
-
-
 /////////// DAO
 @Dao
 interface UserDao {
@@ -79,3 +51,30 @@ interface OAuth2Dao {
     @Query("SELECT * FROM oauth2 WHERE oid=:arg0")
     fun query(oid: String): LiveData<OAuth2>
 }
+
+////////// Entity
+@Entity
+data class User(
+        @PrimaryKey
+        var name: String? = null
+)
+
+@Entity
+data class App(
+    @PrimaryKey
+    var name: String? = null
+)
+
+@Entity(foreignKeys = arrayOf(
+        ForeignKey(entity = User::class, parentColumns = arrayOf("name"), childColumns = arrayOf("user_name")),
+        ForeignKey(entity = App::class, parentColumns = arrayOf("name"), childColumns = arrayOf("app_name"))
+))
+data class OAuth2(
+    var user_name: String? = null,
+    var app_name: String? = null,
+
+    @PrimaryKey
+    var oid: String? = null,
+    var accessToken: String? = null,
+    var refreshToken: String? = null
+)

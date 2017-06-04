@@ -1,125 +1,62 @@
 package com.walfud.oauth2_android
 
-import android.net.Uri
-import android.text.TextUtils
-import com.google.gson.Gson
+import android.arch.lifecycle.LiveData
 import com.google.gson.annotations.SerializedName
-import com.walfud.walle.algorithm.hash.HashUtils
-import okhttp3.*
-import org.json.JSONObject
-import java.io.Serializable
+import com.walfud.oauth2_android.retrofit2.LiveDataCallAdapterFactory
+import com.walfud.oauth2_android.retrofit2.MyResponse
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.*
 
 /**
  * Created by walfud on 25/05/2017.
  */
 
-val network by lazy { Network() }
+val network: OAuth2Service by lazy {
+    Retrofit.Builder()
+            .baseUrl("http://oauth2.walfud.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .addCallAdapterFactory(LiveDataCallAdapterFactory())
+            .client(
+                    OkHttpClient.Builder()
+                            .addInterceptor {
+                                it.proceed(it.request().newBuilder()
+                                        .build())
+                            }
+                            .build()
+            )
+            .build()
+            .create(OAuth2Service::class.java)
+}
 
-class Network {
+const val HEADER_ACCESS_TOKEN = "X-Access-Token"
 
-    companion object {
-        val HEADER_ACCESS_TOKEN = "X-Access-Token"
-    }
+interface OAuth2Service {
 
-    val okHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-                .build()
-    }
+    @POST("login")
+    fun login(@Body loginRequestBean: LoginRequestBean): LiveData<MyResponse<LoginResponseBean>>
 
-    fun login(username: String, password: String): LoginResponseBean {
-        val loginRequestBean = LoginRequestBean(username,
-                HashUtils.md5(password))
-        val loginResponse = okHttpClient.newCall(Request.Builder()
-                .url("http://oauth2.walfud.com/login")
-                .post(RequestBody.create(MediaType.parse("application/json; charset=utf-8"),
-                        Gson().toJson(loginRequestBean)))
-                .build())
-                .execute()
-        if (!loginResponse.isSuccessful) throw RuntimeException("login fail")
+    @GET("authorize?response_type=code&redirect_uri=&scope=&state=")
+    fun authorize(@Header(HEADER_ACCESS_TOKEN) token: String,
+                  @Query("client_id") clientId: String): LiveData<MyResponse<AuthorizeResponseBean>>
 
-        return getResponse(loginResponse.body().string(), LoginResponseBean::class.java)
-    }
+    @FormUrlEncoded
+    @POST
+    fun token(@Header(HEADER_ACCESS_TOKEN) token: String,
+              @Url url: String,
+              @Field("client_id") clientId: String,
+              @Field("code") code: String,
+              @Field("grant_type") grantType: String = "authorization_code",
+              @Field("redirect_uri") redirectUri: String = ""
+              ): LiveData<MyResponse<TokenResponseBean>>
 
-    fun authorize(token: String, clientId: String, redirectUri: Uri = Uri.EMPTY, scope: String = "", state: String = ""): AuthorizeResponseBean {
-        val authorizeResponse = okHttpClient.newCall(Request.Builder()
-                .url(HttpUrl.Builder()
-                        .scheme("http")
-                        .host("oauth2.walfud.com")
-                        .addPathSegment("authorize")
-                        .addQueryParameter("response_type", "code")
-                        .addQueryParameter("client_id", clientId)
-                        .addQueryParameter("redirect_uri", redirectUri.toString())
-                        .addQueryParameter("scope", scope)
-                        .addQueryParameter("state", state)
-                        .build())
-                .header(HEADER_ACCESS_TOKEN, token)
-                .get()
-                .build())
-                .execute()
-        if (!authorizeResponse.isSuccessful) throw RuntimeException("authorize fail")
+    @GET("user")
+    fun user(@Header(HEADER_ACCESS_TOKEN) token: String): LiveData<MyResponse<UserResponseBean>>
 
-        return getResponse(authorizeResponse.body().string(), AuthorizeResponseBean::class.java)
-    }
+    @GET("app")
+    fun app(@Header(HEADER_ACCESS_TOKEN) token: String): LiveData<MyResponse<AppResponseBean>>
 
-    fun token(token: String, clientId: String, redirectUri: Uri = Uri.EMPTY, code: String): TokenResponseBean {
-        val tokenResponse = okHttpClient.newCall(Request.Builder()
-                .url(redirectUri.toString())
-                .header(HEADER_ACCESS_TOKEN, token)
-                .post(FormBody.Builder()
-                        .add("grant_type", "authorization_code")
-                        .add("client_id", clientId)
-                        .add("redirect_uri", redirectUri.toString())
-                        .add("code", code)
-                        .build())
-                .build())
-                .execute()
-        if (!tokenResponse.isSuccessful) throw RuntimeException("token fail")
-
-        return getResponse(tokenResponse.body().string(), TokenResponseBean::class.java)
-    }
-
-
-    fun user(token: String): UserResponseBean {
-        val userResponse = okHttpClient.newCall(Request.Builder()
-                .url(HttpUrl.Builder()
-                        .scheme("http")
-                        .host("oauth2.walfud.com")
-                        .addPathSegment("user")
-                        .build())
-                .header(HEADER_ACCESS_TOKEN, token)
-                .get()
-                .build())
-                .execute()
-        if (!userResponse.isSuccessful) throw RuntimeException("fetch user fail")
-
-        return getResponse(userResponse.body().string(), UserResponseBean::class.java)
-    }
-
-    fun app(token: String): AppResponseBean {
-        val userResponse = okHttpClient.newCall(Request.Builder()
-                .url(HttpUrl.Builder()
-                        .scheme("http")
-                        .host("oauth2.walfud.com")
-                        .addPathSegment("app")
-                        .build())
-                .header(HEADER_ACCESS_TOKEN, token)
-                .get()
-                .build())
-                .execute()
-        if (!userResponse.isSuccessful) throw RuntimeException("fetch app fail")
-
-        return getResponse(userResponse.body().string(), AppResponseBean::class.java)
-    }
-
-    fun <T> getResponse(responseBody: String, clazz: Class<T>): T {
-        val json = JSONObject(responseBody)
-        val err = json.optString("err")
-        if (TextUtils.isEmpty(err)) {
-            return Gson().fromJson(responseBody, clazz)
-        }
-
-        throw RuntimeException(err)
-    }
 }
 
 data class ErrorResponse(val err: String?)
@@ -127,27 +64,27 @@ data class LoginRequestBean(val username: String, val password: String)
 data class LoginResponseBean(
         @SerializedName("access_token") val accessToken: String,
         @SerializedName("refresh_token") val refreshToken: String
-) : Serializable
+) : java.io.Serializable
 
 data class AuthorizeResponseBean(
         val code: String,
         val state: String,
         val cb: String
-) : Serializable
+) : java.io.Serializable
 
 data class TokenResponseBean(
         @SerializedName("access_token") val accessToken: String,
         @SerializedName("refresh_token") val refreshToken: String,
         @SerializedName("expires_in") val expiresIn: Long,
         @SerializedName("token_type") val tokenType: String
-) : Serializable
+) : java.io.Serializable
 
 data class UserResponseBean(
         val oid: String,
         @SerializedName("username") val name: String
-) : Serializable
+) : java.io.Serializable
 
 data class AppResponseBean(
         val oid: String,
         @SerializedName("app_name") val name: String
-) : Serializable
+) : java.io.Serializable

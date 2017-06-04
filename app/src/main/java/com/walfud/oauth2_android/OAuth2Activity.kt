@@ -1,16 +1,13 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
-import android.arch.lifecycle.MutableLiveData
-import android.arch.lifecycle.Observer
-import android.arch.lifecycle.ViewModel
-import android.arch.lifecycle.ViewModelProviders
+import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
-import kotlinx.coroutines.experimental.android.UI
-import kotlinx.coroutines.experimental.launch
+import com.walfud.oauth2_android.retrofit2.MyResponse
+import kotlinx.coroutines.experimental.CommonPool
+import kotlinx.coroutines.experimental.async
 import org.jetbrains.anko.bundleOf
-import org.jetbrains.anko.coroutines.experimental.bg
 
 /**
  * Created by walfud on 25/05/2017.
@@ -49,7 +46,7 @@ class OAuth2Activity : BaseActivity() {
         viewModel.err.observe(this, Observer {
             finish(it!!, null)
         })
-        viewModel.oauth2LiveData.observe(this, Observer {
+        viewModel.fetchUserLiveData.observe(this, Observer {
             it!!
 
             finish(null, bundleOf(
@@ -84,7 +81,7 @@ class OAuth2Activity : BaseActivity() {
                 val loginResponseBean = data.getSerializableExtra(EXTRA_LOGIN_RESPONSE_BEAN) as LoginResponseBean
                 if (!intent.hasExtra(EXTRA_CLIENT_ID)) {
                     // finish
-                    viewModel.fetchOAuth2Data(loginResponseBean.accessToken, loginResponseBean.refreshToken)
+                    viewModel.fetchUserData(loginResponseBean.accessToken, loginResponseBean.refreshToken)
                 } else {
                     AuthorizeActivity.startActivityForResult(this, REQUEST_AUTHORIZE, loginResponseBean.accessToken, intent.getStringExtra(EXTRA_CLIENT_ID))
                 }
@@ -92,7 +89,7 @@ class OAuth2Activity : BaseActivity() {
             REQUEST_AUTHORIZE -> {
                 data!!
                 val tokenResponseBean = data.getSerializableExtra(EXTRA_TOKEN_RESPONSE_BEAN) as TokenResponseBean
-                viewModel.fetchOAuth2Data(tokenResponseBean.accessToken, tokenResponseBean.refreshToken)
+                viewModel.fetchUserData(tokenResponseBean.accessToken, tokenResponseBean.refreshToken)
             }
         }
     }
@@ -103,49 +100,72 @@ class MainViewModel : ViewModel() {
 
     val err: MutableLiveData<String> = MutableLiveData()
 
-    val oauth2LiveData: MutableLiveData<OAuth2Data> = MutableLiveData()
-    fun fetchOAuth2Data(accessToken: String, refreshToken: String) {
-        launch(UI) {
-            oauth2LiveData.value = bg {
-                val oauth2Data = repository.fetchOAuth2Data(accessToken, refreshToken)
-                repository.saveOAuth2Data(oauth2Data)
-                return@bg oauth2Data
-            }.await()
+    val fetchUserInput = MutableLiveData<FetchUserInput>()
+    val userLiveData: LiveData<MyResponse<UserResponseBean>> = Transformations.switchMap(fetchUserInput, { (accessToken, refreshToken) ->
+        repository.user(accessToken)
+    })
+    val appLiveData: LiveData<MyResponse<AppResponseBean>> = Transformations.switchMap(userLiveData, { userResponse ->
+        if (!userResponse.isSuccess()) {
+            err.value = userResponse.err
+            return@switchMap MutableLiveData<MyResponse<AppResponseBean>>()
         }
+        repository.app(fetchUserInput.value!!.accessToken)
+    })
+    val fetchUserLiveData: LiveData<OAuth2Data> = Transformations.switchMap(appLiveData, { appResponse ->
+        if (!appResponse.isSuccess()) {
+            err.value = appResponse.err
+            return@switchMap MutableLiveData<OAuth2Data>()
+        }
+
+        val oauth2Data = OAuth2Data(
+                userLiveData.value!!.body!!.name,
+                appLiveData.value!!.body!!.name,
+                userLiveData.value!!.body!!.oid,
+                fetchUserInput.value!!.accessToken,
+                fetchUserInput.value!!.refreshToken
+        )
+        repository.saveOAuth2Data(oauth2Data)
+    })
+
+    fun fetchUserData(accessToken: String, refreshToken: String) {
+        fetchUserInput.value = FetchUserInput(accessToken, refreshToken)
     }
 }
 
 class MainRepository : BaseRepository() {
-    fun fetchOAuth2Data(accessToken: String, refreshToken: String): OAuth2Data {
-        val userResponseBase = network.user(accessToken)
-        val appResponseBase = network.app(accessToken)
-        return OAuth2Data(
-                userResponseBase.name,
-                appResponseBase.name,
-                userResponseBase.oid,
-                accessToken,
-                refreshToken
-        )
+
+    fun user(token: String): LiveData<MyResponse<UserResponseBean>> {
+        return network.user(token)
     }
 
-    fun saveOAuth2Data(oauth2Data: OAuth2Data) {
-        try {
-            database.beginTransaction()
-            database.userDao().upsert(User(oauth2Data.username))
-            database.appDao().upsert(App(oauth2Data.appName))
-            database.oauth2Dao().upsert(OAuth2(
-                    oauth2Data.username,
-                    oauth2Data.appName,
-                    oauth2Data.oid,
-                    oauth2Data.accessToken,
-                    oauth2Data.refreshToken
-            ))
-            database.setTransactionSuccessful()
-        } catch (e: Exception) {
+    fun app(token: String): LiveData<MyResponse<AppResponseBean>> {
+        return network.app(token)
+    }
 
-        } finally {
-            database.endTransaction()
+    fun saveOAuth2Data(oauth2Data: OAuth2Data): LiveData<OAuth2Data> {
+        val liveData = MutableLiveData<OAuth2Data>()
+        async(CommonPool) {
+            database.beginTransaction()
+            try {
+                database.userDao().upsert(User(oauth2Data.username))
+                database.appDao().upsert(App(oauth2Data.appName))
+                database.oauth2Dao().upsert(OAuth2(
+                        oauth2Data.username,
+                        oauth2Data.appName,
+                        oauth2Data.oid,
+                        oauth2Data.accessToken,
+                        oauth2Data.refreshToken
+                ))
+                database.setTransactionSuccessful()
+                liveData.postValue(oauth2Data)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                liveData.postValue(null)
+            } finally {
+                database.endTransaction()
+            }
         }
+        return liveData
     }
 }
 
@@ -155,4 +175,9 @@ data class OAuth2Data(
         var oid: String,
         var accessToken: String,
         var refreshToken: String
+)
+
+data class FetchUserInput(
+        val accessToken: String,
+        val refreshToken: String
 )

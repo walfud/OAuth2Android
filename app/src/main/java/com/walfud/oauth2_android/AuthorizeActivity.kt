@@ -1,17 +1,11 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
-import android.arch.lifecycle.MutableLiveData
-import android.arch.lifecycle.Observer
-import android.arch.lifecycle.ViewModel
-import android.arch.lifecycle.ViewModelProviders
+import android.arch.lifecycle.*
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import kotlinx.coroutines.experimental.android.UI
-import kotlinx.coroutines.experimental.launch
+import com.walfud.oauth2_android.retrofit2.MyResponse
 import org.jetbrains.anko.*
-import org.jetbrains.anko.coroutines.experimental.bg
 import org.jetbrains.anko.sdk25.coroutines.onClick
 
 /**
@@ -43,7 +37,7 @@ class AuthorizeActivity : BaseActivity() {
             finish(it!!, null)
         })
         viewModel.tokenLiveData.observe(this, Observer {
-            finish(null, bundleOf(EXTRA_TOKEN_RESPONSE_BEAN to it!!))
+            finish(null, bundleOf(EXTRA_TOKEN_RESPONSE_BEAN to it!!.body!!))
         })
     }
 
@@ -70,25 +64,34 @@ class AuthorizeViewModel : ViewModel() {
     val repository = AuthorizeRepository()
 
     val err = MutableLiveData<String>()
-    val tokenLiveData = MutableLiveData<TokenResponseBean>()
-    fun authorize(username: String, password: String) {
-        launch(UI) {
-            try {
-                val tokenResponseBean = bg {
-                    repository.token(username, password)
-                }.await()
-
-                tokenLiveData.value = tokenResponseBean
-            } catch (e: Exception) {
-                err.value = e.message
-            }
-        }
+    val authorizeInput = MutableLiveData<AuthorizeInput>()
+    val authorizeLiveData: LiveData<MyResponse<AuthorizeResponseBean>> = Transformations.switchMap(authorizeInput, { (token, clientId) ->
+        repository.authorize(token, clientId)
+    })
+    fun authorize(token: String, clientId: String) {
+        authorizeInput.value = AuthorizeInput(token, clientId)
     }
+
+    val tokenLiveData: LiveData<MyResponse<TokenResponseBean>> = Transformations.switchMap(authorizeLiveData, { myResponse ->
+        if (!myResponse.isSuccess()) {
+            err.value = myResponse.err
+            return@switchMap MutableLiveData<MyResponse<TokenResponseBean>>()
+        }
+        repository.token(authorizeInput.value!!.token,
+                myResponse.body!!.cb,
+                authorizeInput.value!!.clientId,
+                myResponse.body!!.code)
+    })
 }
 
 class AuthorizeRepository : BaseRepository() {
-    fun token(token: String, clientId: String): TokenResponseBean {
-        val authorizeResponseBean = network.authorize(token, clientId)
-        return network.token(token, clientId, Uri.parse(authorizeResponseBean.cb), authorizeResponseBean.code)
+    fun authorize(token: String, clientId: String): LiveData<MyResponse<AuthorizeResponseBean>> {
+        return network.authorize(token, clientId)
+    }
+
+    fun token(token: String, url: String, clientId: String, code: String): LiveData<MyResponse<TokenResponseBean>> {
+        return network.token(token, url, clientId, code)
     }
 }
+
+data class AuthorizeInput(val token: String, val clientId: String)

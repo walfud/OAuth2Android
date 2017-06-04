@@ -1,16 +1,11 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
-import android.arch.lifecycle.MutableLiveData
-import android.arch.lifecycle.Observer
-import android.arch.lifecycle.ViewModel
-import android.arch.lifecycle.ViewModelProviders
+import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
-import kotlinx.coroutines.experimental.android.UI
-import kotlinx.coroutines.experimental.launch
+import com.walfud.oauth2_android.retrofit2.MyResponse
 import org.jetbrains.anko.*
-import org.jetbrains.anko.coroutines.experimental.bg
 import org.jetbrains.anko.sdk25.coroutines.onClick
 
 val EXTRA_LOGIN_RESPONSE_BEAN = "EXTRA_LOGIN_RESPONSE_BEAN"
@@ -34,7 +29,7 @@ class LoginActivity : BaseActivity() {
             finish(it!!, null)
         })
         viewModel.loginLiveData.observe(this, Observer {
-            finish(null, bundleOf(EXTRA_LOGIN_RESPONSE_BEAN to it!!))
+            finish(null, bundleOf(EXTRA_LOGIN_RESPONSE_BEAN to it!!.body!!))
         })
     }
 }
@@ -59,24 +54,17 @@ class LoginViewModel : ViewModel() {
     val repository = LoginRepository()
 
     val err = MutableLiveData<String>()
-    val loginLiveData = MutableLiveData<LoginResponseBean>()
+    val loginInput = MutableLiveData<LoginRequestBean>()
+    val loginLiveData: LiveData<MyResponse<LoginResponseBean>> = Transformations.switchMap(loginInput, { (username, password) ->
+        repository.login(username, password)
+    })
     fun login(username: String, password: String) {
-        launch(UI) {
-            try {
-                val loginResponseBean = bg {
-                    repository.login(username, password)
-                }.await()
-
-                loginLiveData.value = loginResponseBean
-            } catch (e: Exception) {
-                err.value = e.message
-            }
-        }
+        loginInput.value = LoginRequestBean(username, password)
     }
 }
 
 class LoginRepository : BaseRepository() {
-    fun login(username: String, password: String): LoginResponseBean {
-        return network.login(username, password)
+    fun login(username: String, password: String): LiveData<MyResponse<LoginResponseBean>> {
+        return network.login(LoginRequestBean(username, password))
     }
 }

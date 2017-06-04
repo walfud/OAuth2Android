@@ -42,6 +42,8 @@ dependencies {
     }
 
     compile 'com.walfud:walle:2.0.2'
+    compile 'com.squareup.retrofit2:retrofit:2.3.0'
+
 }
 
 kotlin {
