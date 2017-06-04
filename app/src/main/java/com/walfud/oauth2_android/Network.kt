@@ -59,7 +59,6 @@ interface OAuth2Service {
 
 }
 
-data class ErrorResponse(val err: String?)
 data class LoginRequestBean(val username: String, val password: String)
 data class LoginResponseBean(
         @SerializedName("access_token") val accessToken: String,

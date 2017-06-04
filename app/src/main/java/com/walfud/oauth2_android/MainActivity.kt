@@ -51,6 +51,11 @@ class MainActivityUI : AnkoComponent<MainActivity> {
                     startOAuth2ActivityForResult(owner, REQUEST_TEST_LOGIN)
                 }
             }
+            button("Test Logout") {
+                onClick {
+                    preference.oid = null
+                }
+            }
             button("Test OAuth2") {
                 onClick {
                     startOAuth2ActivityForResult(owner, REQUEST_TEST_OAUTH2, "contactsync")

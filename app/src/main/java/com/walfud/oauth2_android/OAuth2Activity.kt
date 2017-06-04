@@ -57,13 +57,31 @@ class OAuth2Activity : BaseActivity() {
                     EXTRA_REFRESH_TOKEN to it.refreshToken
             ))
         })
+        viewModel.authorizeInput.observe(this, Observer {
+            it!!
+
+            AuthorizeActivity.startActivityForResult(this, REQUEST_AUTHORIZE, it, intent.getStringExtra(EXTRA_CLIENT_ID))
+        })
+        viewModel.queryUserDataLiveData.observe(this, Observer {
+            it!!
+
+            finish(null, bundleOf(
+                    EXTRA_USERNAME to it.username,
+                    EXTRA_APPNAME to it.appName,
+                    EXTRA_OID to it.oid,
+                    EXTRA_ACCESS_TOKEN to it.accessToken,
+                    EXTRA_REFRESH_TOKEN to it.refreshToken
+            ))
+        })
 
         if (!isLogin()) {
-            // Anonymous
             LoginActivity.startActivityForResult(this, REQUEST_LOGIN)
         } else {
-            // Login
-            // TODO: 设计持久化系统
+            if (!intent.hasExtra(EXTRA_CLIENT_ID)) {
+                viewModel.queryUserData()
+            } else {
+                viewModel.queryToken()
+            }
         }
     }
 
@@ -81,15 +99,15 @@ class OAuth2Activity : BaseActivity() {
                 val loginResponseBean = data.getSerializableExtra(EXTRA_LOGIN_RESPONSE_BEAN) as LoginResponseBean
                 if (!intent.hasExtra(EXTRA_CLIENT_ID)) {
                     // finish
-                    viewModel.fetchUserData(loginResponseBean.accessToken, loginResponseBean.refreshToken)
+                    viewModel.fetchUserData(loginResponseBean.accessToken, loginResponseBean.refreshToken, true)
                 } else {
-                    AuthorizeActivity.startActivityForResult(this, REQUEST_AUTHORIZE, loginResponseBean.accessToken, intent.getStringExtra(EXTRA_CLIENT_ID))
+                    viewModel.authorizeInput.value = loginResponseBean.accessToken
                 }
             }
             REQUEST_AUTHORIZE -> {
                 data!!
                 val tokenResponseBean = data.getSerializableExtra(EXTRA_TOKEN_RESPONSE_BEAN) as TokenResponseBean
-                viewModel.fetchUserData(tokenResponseBean.accessToken, tokenResponseBean.refreshToken)
+                viewModel.fetchUserData(tokenResponseBean.accessToken, tokenResponseBean.refreshToken, false)
             }
         }
     }
@@ -117,6 +135,8 @@ class MainViewModel : ViewModel() {
             return@switchMap MutableLiveData<OAuth2Data>()
         }
 
+        if (fetchUserInput.value!!.savePrefs) preference.oid = userLiveData.value!!.body!!.oid
+
         val oauth2Data = OAuth2Data(
                 userLiveData.value!!.body!!.name,
                 appLiveData.value!!.body!!.name,
@@ -127,8 +147,40 @@ class MainViewModel : ViewModel() {
         repository.saveOAuth2Data(oauth2Data)
     })
 
-    fun fetchUserData(accessToken: String, refreshToken: String) {
-        fetchUserInput.value = FetchUserInput(accessToken, refreshToken)
+    fun fetchUserData(accessToken: String, refreshToken: String, savePrefs: Boolean) {
+        fetchUserInput.value = FetchUserInput(accessToken, refreshToken, savePrefs)
+    }
+
+    val authorizeInput = MutableLiveData<String>()
+    fun queryToken() {
+        async(CommonPool) {
+            val oauth2 = database.oauth2Dao().querySync(preference.oid!!)
+            authorizeInput.postValue(oauth2.accessToken)
+        }
+    }
+
+    val queryUserDataInput = MutableLiveData<String>()
+    val queryOAuth2 = Transformations.switchMap(queryUserDataInput, {
+        database.oauth2Dao().query(it!!)
+    })!!
+    val queryUser = Transformations.switchMap(queryOAuth2, {
+        database.userDao().query(queryOAuth2.value!!.user_name!!)
+    })!!
+    val queryApp = Transformations.switchMap(queryUser, {
+        database.appDao().query(queryOAuth2.value!!.app_name!!)
+    })!!
+    val queryUserDataLiveData = Transformations.map(queryApp, {
+        OAuth2Data(
+                queryUser.value!!.name!!,
+                queryApp.value!!.name!!,
+                queryOAuth2.value!!.oid!!,
+                queryOAuth2.value!!.accessToken!!,
+                queryOAuth2.value!!.refreshToken!!
+        )
+    })!!
+
+    fun queryUserData() {
+        queryUserDataInput.value = preference.oid!!
     }
 }
 
@@ -179,5 +231,6 @@ data class OAuth2Data(
 
 data class FetchUserInput(
         val accessToken: String,
-        val refreshToken: String
+        val refreshToken: String,
+        val savePrefs: Boolean
 )

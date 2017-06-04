@@ -50,6 +50,9 @@ interface OAuth2Dao {
 
     @Query("SELECT * FROM oauth2 WHERE oid=:arg0")
     fun query(oid: String): LiveData<OAuth2>
+
+    @Query("SELECT * FROM oauth2 WHERE oid=:arg0")
+    fun querySync(oid: String): OAuth2
 }
 
 ////////// Entity
