@@ -1,17 +1,16 @@
 package com.walfud.oauth2_android
 
+import android.content.Context
 import org.jetbrains.anko.defaultSharedPreferences
 
 /**
  * Created by walfud on 25/05/2017.
  */
 
-val preference by lazy { Preference() }
-
 const private val PREFS_OID = "PREFS_OID"
 
-class Preference {
-    val prefs = OAuth2Application.context.defaultSharedPreferences
+class Preference(context: Context) {
+    val prefs = context.defaultSharedPreferences
 
     var oid: String?
         get() {

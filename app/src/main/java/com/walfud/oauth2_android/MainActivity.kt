@@ -53,7 +53,7 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             }
             button("Test Logout") {
                 onClick {
-                    preference.oid = null
+                    Preference(owner).oid = null
                 }
             }
             button("Test OAuth2") {

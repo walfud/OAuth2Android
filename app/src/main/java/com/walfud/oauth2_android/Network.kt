@@ -2,37 +2,17 @@ package com.walfud.oauth2_android
 
 import android.arch.lifecycle.LiveData
 import com.google.gson.annotations.SerializedName
-import com.walfud.oauth2_android.retrofit2.LiveDataCallAdapterFactory
 import com.walfud.oauth2_android.retrofit2.MyResponse
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
 
 /**
  * Created by walfud on 25/05/2017.
  */
 
-val network: OAuth2Service by lazy {
-    Retrofit.Builder()
-            .baseUrl("http://oauth2.walfud.com/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .addCallAdapterFactory(LiveDataCallAdapterFactory())
-            .client(
-                    OkHttpClient.Builder()
-                            .addInterceptor {
-                                it.proceed(it.request().newBuilder()
-                                        .build())
-                            }
-                            .build()
-            )
-            .build()
-            .create(OAuth2Service::class.java)
-}
 
 const val HEADER_ACCESS_TOKEN = "X-Access-Token"
 
-interface OAuth2Service {
+interface Network {
 
     @POST("login")
     fun login(@Body loginRequestBean: LoginRequestBean): LiveData<MyResponse<LoginResponseBean>>

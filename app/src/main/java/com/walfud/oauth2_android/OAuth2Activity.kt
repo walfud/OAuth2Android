@@ -4,10 +4,15 @@ import android.app.Activity
 import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
+import android.text.TextUtils
+import com.walfud.oauth2_android.OAuth2Activity.Companion.REQUEST_LOGIN
+import com.walfud.oauth2_android.dagger2.DaggerOAuth2Component
+import com.walfud.oauth2_android.dagger2.OAuth2Module
 import com.walfud.oauth2_android.retrofit2.MyResponse
 import kotlinx.coroutines.experimental.CommonPool
 import kotlinx.coroutines.experimental.async
 import org.jetbrains.anko.bundleOf
+import javax.inject.Inject
 
 /**
  * Created by walfud on 25/05/2017.
@@ -37,12 +42,18 @@ class OAuth2Activity : BaseActivity() {
         val REQUEST_AUTHORIZE = 2
     }
 
-    lateinit var viewModel: MainViewModel
+    @Inject lateinit var viewModel: OAuth2ViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        viewModel = ViewModelProviders.of(this).get(MainViewModel::class.java)
+        DaggerOAuth2Component.builder()
+                .applicationComponent((application as OAuth2Application).component)
+                .oAuth2Module(OAuth2Module(this))
+                .build()
+                .inject(this)
+
+        viewModel = ViewModelProviders.of(this).get(OAuth2ViewModel::class.java)
         viewModel.err.observe(this, Observer {
             finish(it!!, null)
         })
@@ -73,16 +84,12 @@ class OAuth2Activity : BaseActivity() {
                     EXTRA_REFRESH_TOKEN to it.refreshToken
             ))
         })
+        viewModel.loginLiveData.observe(this, Observer {
+            it!!
+            LoginActivity.startActivityForResult(this, it)
+        })
 
-        if (!isLogin()) {
-            LoginActivity.startActivityForResult(this, REQUEST_LOGIN)
-        } else {
-            if (!intent.hasExtra(EXTRA_CLIENT_ID)) {
-                viewModel.queryUserData()
-            } else {
-                viewModel.queryToken()
-            }
-        }
+        viewModel.param(intent.extras)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -113,10 +120,23 @@ class OAuth2Activity : BaseActivity() {
     }
 }
 
-class MainViewModel : ViewModel() {
-    val repository = MainRepository()
+class OAuth2ViewModel : ViewModel() {
+    lateinit var repository: OAuth2Repository
 
     val err: MutableLiveData<String> = MutableLiveData()
+
+    val loginLiveData = MutableLiveData<Int>()
+    fun param(bundle: Bundle?) {
+        if (TextUtils.isEmpty(repository.preference.oid)) {
+            loginLiveData.value = REQUEST_LOGIN
+        } else {
+            if (bundle?.containsKey(EXTRA_CLIENT_ID) ?: false) {
+                queryToken()
+            } else {
+                queryUserDataInput.value = repository.preference.oid!!
+            }
+        }
+    }
 
     val fetchUserInput = MutableLiveData<FetchUserInput>()
     val userLiveData: LiveData<MyResponse<UserResponseBean>> = Transformations.switchMap(fetchUserInput, { (accessToken, refreshToken) ->
@@ -135,7 +155,7 @@ class MainViewModel : ViewModel() {
             return@switchMap MutableLiveData<OAuth2Data>()
         }
 
-        if (fetchUserInput.value!!.savePrefs) preference.oid = userLiveData.value!!.body!!.oid
+        if (fetchUserInput.value!!.savePrefs) repository.preference.oid = userLiveData.value!!.body!!.oid
 
         val oauth2Data = OAuth2Data(
                 userLiveData.value!!.body!!.name,
@@ -154,20 +174,20 @@ class MainViewModel : ViewModel() {
     val authorizeInput = MutableLiveData<String>()
     fun queryToken() {
         async(CommonPool) {
-            val oauth2 = database.oauth2Dao().querySync(preference.oid!!)
+            val oauth2 = repository.database.oauth2Dao().querySync(repository.preference.oid!!)
             authorizeInput.postValue(oauth2.accessToken)
         }
     }
 
     val queryUserDataInput = MutableLiveData<String>()
     val queryOAuth2 = Transformations.switchMap(queryUserDataInput, {
-        database.oauth2Dao().query(it!!)
+        repository.database.oauth2Dao().query(it!!)
     })!!
     val queryUser = Transformations.switchMap(queryOAuth2, {
-        database.userDao().query(queryOAuth2.value!!.user_name!!)
+        repository.database.userDao().query(queryOAuth2.value!!.user_name!!)
     })!!
     val queryApp = Transformations.switchMap(queryUser, {
-        database.appDao().query(queryOAuth2.value!!.app_name!!)
+        repository.database.appDao().query(queryOAuth2.value!!.app_name!!)
     })!!
     val queryUserDataLiveData = Transformations.map(queryApp, {
         OAuth2Data(
@@ -178,13 +198,9 @@ class MainViewModel : ViewModel() {
                 queryOAuth2.value!!.refreshToken!!
         )
     })!!
-
-    fun queryUserData() {
-        queryUserDataInput.value = preference.oid!!
-    }
 }
 
-class MainRepository : BaseRepository() {
+class OAuth2Repository(val preference: Preference, val database: Database, val network: Network) {
 
     fun user(token: String): LiveData<MyResponse<UserResponseBean>> {
         return network.user(token)

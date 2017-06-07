@@ -4,9 +4,12 @@ import android.app.Activity
 import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
+import com.walfud.oauth2_android.dagger2.DaggerLoginComponent
+import com.walfud.oauth2_android.dagger2.LoginModule
 import com.walfud.oauth2_android.retrofit2.MyResponse
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
+import javax.inject.Inject
 
 val EXTRA_LOGIN_RESPONSE_BEAN = "EXTRA_LOGIN_RESPONSE_BEAN"
 
@@ -18,13 +21,19 @@ class LoginActivity : BaseActivity() {
         }
     }
 
-    lateinit var viewModel: LoginViewModel
+    @Inject lateinit var viewModel: LoginViewModel
+    @Inject lateinit var viewModel2: LoginViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         LoginActivityUI().setContentView(this)
 
-        viewModel = ViewModelProviders.of(this).get(LoginViewModel::class.java)
+        DaggerLoginComponent.builder()
+                .applicationComponent((application as OAuth2Application).component)
+                .loginModule(LoginModule(this))
+                .build()
+                .inject(this)
+
         viewModel.err.observe(this, Observer {
             finish(it!!, null)
         })
@@ -51,7 +60,7 @@ class LoginActivityUI : AnkoComponent<LoginActivity> {
 }
 
 class LoginViewModel : ViewModel() {
-    val repository = LoginRepository()
+    lateinit var repository: LoginRepository
 
     val err = MutableLiveData<String>()
     val loginInput = MutableLiveData<LoginRequestBean>()
@@ -63,7 +72,7 @@ class LoginViewModel : ViewModel() {
     }
 }
 
-class LoginRepository : BaseRepository() {
+class LoginRepository(val preference: Preference, val database: Database, val network: Network) {
     fun login(username: String, password: String): LiveData<MyResponse<LoginResponseBean>> {
         return network.login(LoginRequestBean(username, password))
     }

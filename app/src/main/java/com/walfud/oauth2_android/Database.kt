@@ -8,8 +8,6 @@ import android.arch.persistence.room.*
  * Created by walfud on 29/05/2017.
  */
 
-val database by lazy { Room.databaseBuilder(context, Database::class.java, "oauth2").build()!! }
-
 @android.arch.persistence.room.Database(entities = arrayOf(
         User::class,
         App::class,
