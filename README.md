@@ -4,5 +4,4 @@ adb shell am start -n "com.walfud.oauth2_android/.MainActivity" --es "EXTRA_CLIE
 ```
 
 # TODO
-* Dagger2
 * Resource
