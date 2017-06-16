@@ -1,6 +1,7 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
+import android.app.Dialog
 import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
@@ -22,7 +23,7 @@ class LoginActivity : BaseActivity() {
     }
 
     @Inject lateinit var viewModel: LoginViewModel
-    @Inject lateinit var viewModel2: LoginViewModel
+    lateinit var dialog: Dialog
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,12 +35,29 @@ class LoginActivity : BaseActivity() {
                 .build()
                 .inject(this)
 
-        viewModel.err.observe(this, Observer {
-            finish(it!!, null)
-        })
         viewModel.loginLiveData.observe(this, Observer {
-            finish(null, bundleOf(EXTRA_LOGIN_RESPONSE_BEAN to it!!.body!!))
+            it!!
+
+            when (it.status) {
+                Resource.STATUS_SUCCESS -> {
+                    finish(null, bundleOf(EXTRA_LOGIN_RESPONSE_BEAN to it.data!!))
+                }
+                Resource.STATUS_ERROR -> {
+                    finish(it.err, null)
+                }
+                Resource.STATUS_LOADING -> {
+                    dialog.setTitle("loading")
+                    dialog.show()
+                }
+            }
         })
+
+        dialog = Dialog(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (dialog.isShowing) dialog.dismiss()
     }
 }
 
@@ -62,18 +80,24 @@ class LoginActivityUI : AnkoComponent<LoginActivity> {
 class LoginViewModel : ViewModel() {
     lateinit var repository: LoginRepository
 
-    val err = MutableLiveData<String>()
     val loginInput = MutableLiveData<LoginRequestBean>()
-    val loginLiveData: LiveData<MyResponse<LoginResponseBean>> = Transformations.switchMap(loginInput, { (username, password) ->
-        repository.login(username, password)
-    })
     fun login(username: String, password: String) {
         loginInput.value = LoginRequestBean(username, password)
     }
+
+    val loginLiveData: LiveData<Resource<LoginResponseBean>> = Transformations.switchMap(loginInput, { (username, password) ->
+        repository.login(username, password)
+    })
 }
 
 class LoginRepository(val preference: Preference, val database: Database, val network: Network) {
-    fun login(username: String, password: String): LiveData<MyResponse<LoginResponseBean>> {
-        return network.login(LoginRequestBean(username, password))
+    fun login(username: String, password: String): LiveData<Resource<LoginResponseBean>> {
+        return object : ResourceFetcher<LoginResponseBean>() {
+            override fun network(): LiveData<MyResponse<LoginResponseBean>> {
+                return network.login(LoginRequestBean(username, password))
+            }
+        }
+                .fetch()
+                .asLiveData()
     }
 }

@@ -78,6 +78,9 @@ data class MyResponse<out T>(
                 in 200..299 -> {
                     body = retrofit2Response.body()
                 }
+                in 300..399 -> {
+                    // Do nothing. OkHttp takes care of it
+                }
                 in 400..499 -> {
                     err = retrofit2Response.errorBody()?.string()
                 }
