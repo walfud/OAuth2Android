@@ -10,7 +10,7 @@ import com.walfud.oauth2_android.retrofit2.MyResponse
  * Created by walfud on 2017/6/15.
  */
 
-abstract class ResourceFetcher<T> {
+abstract class ResourceFetcher<T>(val loadingMessage: String? = null) {
     val result = MediatorLiveData<Resource<T>>()
 
     val memoryData = MutableLiveData<T>()
@@ -34,7 +34,7 @@ abstract class ResourceFetcher<T> {
     open fun valid(t: T?) = t != null
 
     fun fetch(): ResourceFetcher<T> {
-        result.postValue(Resource.loading())
+        result.postValue(Resource.loading(loadingMessage))
 
         // Try memory
         val memoryData = memory()

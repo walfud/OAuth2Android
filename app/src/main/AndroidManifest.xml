@@ -23,7 +23,7 @@
         </activity>
         <activity android:name=".OAuth2Activity" />
         <activity android:name=".LoginActivity" />
-        <activity android:name=".AuthorizeActivity" />
+        <activity android:name=".TokenActivity" />
     </application>
 
 </manifest>

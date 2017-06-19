@@ -46,7 +46,7 @@ class LoginActivity : BaseActivity() {
                     finish(it.err, null)
                 }
                 Resource.STATUS_LOADING -> {
-                    dialog.setTitle("loading")
+                    dialog.setTitle(it.loading)
                     dialog.show()
                 }
             }
@@ -92,7 +92,7 @@ class LoginViewModel : ViewModel() {
 
 class LoginRepository(val preference: Preference, val database: Database, val network: Network) {
     fun login(username: String, password: String): LiveData<Resource<LoginResponseBean>> {
-        return object : ResourceFetcher<LoginResponseBean>() {
+        return object : ResourceFetcher<LoginResponseBean>("Login") {
             override fun network(): LiveData<MyResponse<LoginResponseBean>> {
                 return network.login(LoginRequestBean(username, password))
             }

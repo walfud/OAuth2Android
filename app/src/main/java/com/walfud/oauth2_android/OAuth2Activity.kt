@@ -71,7 +71,7 @@ class OAuth2Activity : BaseActivity() {
         viewModel.authorizeInput.observe(this, Observer {
             it!!
 
-            AuthorizeActivity.startActivityForResult(this, REQUEST_AUTHORIZE, it, intent.getStringExtra(EXTRA_CLIENT_ID))
+            TokenActivity.startActivityForResult(this, REQUEST_AUTHORIZE, it, intent.getStringExtra(EXTRA_CLIENT_ID))
         })
         viewModel.queryUserDataLiveData.observe(this, Observer {
             it!!
