@@ -42,6 +42,7 @@ class TokenActivity : BaseActivity() {
                 .tokenModule(TokenModule(this))
                 .build()
                 .inject(this)
+        dialog = Dialog(this)
 
         viewModel.tokenLiveData.observe(this, Observer {
             it!!
@@ -59,8 +60,6 @@ class TokenActivity : BaseActivity() {
                 }
             }
         })
-
-        dialog = Dialog(this)
     }
 
     override fun onDestroy() {
@@ -131,7 +130,7 @@ class TokenViewModel : ViewModel() {
 
 class TokenRepository(val preference: Preference, val database: Database, val network: Network) {
     fun authorize(token: String, clientId: String): LiveData<Resource<AuthorizeResponseBean>> {
-        return object : ResourceFetcher<AuthorizeResponseBean>("fetching code") {
+        return object : ResourceFetcher<AuthorizeResponseBean>("network: code") {
             override fun network(): LiveData<MyResponse<AuthorizeResponseBean>> {
                 return network.authorize(token, clientId)
             }
@@ -141,7 +140,7 @@ class TokenRepository(val preference: Preference, val database: Database, val ne
     }
 
     fun token(token: String, url: String, clientId: String, code: String): LiveData<Resource<TokenResponseBean>> {
-        return object : ResourceFetcher<TokenResponseBean>("fetching token") {
+        return object : ResourceFetcher<TokenResponseBean>("network: token") {
             override fun network(): LiveData<MyResponse<TokenResponseBean>> {
                 return network.token(token, url, clientId, code)
             }

@@ -34,6 +34,7 @@ class LoginActivity : BaseActivity() {
                 .loginModule(LoginModule(this))
                 .build()
                 .inject(this)
+        dialog = Dialog(this)
 
         viewModel.loginLiveData.observe(this, Observer {
             it!!
@@ -51,8 +52,6 @@ class LoginActivity : BaseActivity() {
                 }
             }
         })
-
-        dialog = Dialog(this)
     }
 
     override fun onDestroy() {
@@ -92,7 +91,7 @@ class LoginViewModel : ViewModel() {
 
 class LoginRepository(val preference: Preference, val database: Database, val network: Network) {
     fun login(username: String, password: String): LiveData<Resource<LoginResponseBean>> {
-        return object : ResourceFetcher<LoginResponseBean>("Login") {
+        return object : ResourceFetcher<LoginResponseBean>("network: login") {
             override fun network(): LiveData<MyResponse<LoginResponseBean>> {
                 return network.login(LoginRequestBean(username, password))
             }
