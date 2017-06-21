@@ -46,12 +46,12 @@ class MainActivity : BaseActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        data!!
         if (resultCode != Activity.RESULT_OK) {
-            toast(data.getStringExtra(EXTRA_ERROR))
+            toast(data?.getStringExtra(EXTRA_ERROR) ?: "User Cancel")
             return
         }
 
+        data!!
         when (requestCode) {
             REQUEST_TEST_LOGIN -> {
                 val loginResponseBean = data.getSerializableExtra(EXTRA_LOGIN_RESPONSE_BEAN) as LoginResponseBean
@@ -74,6 +74,7 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             button("Test Logout") {
                 onClick {
                     Preference(owner).oid = null
+                    toast("Logout Success")
                 }
             }
             button("Test Login") {
@@ -83,7 +84,11 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             }
             button("Test Token") {
                 onClick {
-                    TokenActivity.startActivityForResult(owner, REQUEST_TEST_TOKEN, owner.accessToken!!, "contactsync")
+                    if (owner.accessToken == null) {
+                        toast("Please Login First")
+                    } else {
+                        TokenActivity.startActivityForResult(owner, REQUEST_TEST_TOKEN, owner.accessToken!!, "contactsync")
+                    }
                 }
             }
             button("Test OAuth2") {
