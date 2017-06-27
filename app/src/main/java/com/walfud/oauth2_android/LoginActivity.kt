@@ -8,6 +8,7 @@ import android.os.Bundle
 import com.walfud.oauth2_android.dagger2.DaggerLoginComponent
 import com.walfud.oauth2_android.dagger2.LoginModule
 import com.walfud.oauth2_android.retrofit2.MyResponse
+import com.walfud.walle.md5
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
 import javax.inject.Inject
@@ -68,7 +69,7 @@ class LoginActivityUI : AnkoComponent<LoginActivity> {
             button(R.string.login_login) {
                 onClick {
                     val username = usernameEt.text.toString()
-                    val password = passwordEt.text.toString()
+                    val password = passwordEt.text.toString().md5()
                     owner.viewModel.login(username, password)
                 }
             }

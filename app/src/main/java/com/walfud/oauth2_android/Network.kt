@@ -60,10 +60,10 @@ data class TokenResponseBean(
 
 data class UserResponseBean(
         val oid: String,
-        @SerializedName("username") val name: String
+        val name: String
 ) : java.io.Serializable
 
 data class AppResponseBean(
         val oid: String,
-        @SerializedName("app_name") val name: String
+        val name: String
 ) : java.io.Serializable

@@ -6,10 +6,11 @@ import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
-import android.util.Log
 import com.walfud.oauth2_android.dagger2.DaggerOAuth2Component
 import com.walfud.oauth2_android.dagger2.OAuth2Module
 import com.walfud.oauth2_android.retrofit2.MyResponse
+import kotlinx.coroutines.experimental.CommonPool
+import kotlinx.coroutines.experimental.async
 import org.jetbrains.anko.bundleOf
 import javax.inject.Inject
 
@@ -127,19 +128,19 @@ class OAuth2ViewModel : ViewModel() {
     fun dispatch(bundle: Bundle?) {
         this.bundle = bundle
 
-        if (TextUtils.isEmpty(repository.preference.oid)) {
+        if (TextUtils.isEmpty(repository.oid)) {
             // Login Activity
             startLoginInput.value = StartLoginInput(OAuth2Activity.REQUEST_LOGIN)
         } else {
             if (bundle?.containsKey(EXTRA_CLIENT_ID) ?: false) {
                 // Token Activity
-                val token = repository.getToken()
+                val token = repository.token(repository.oid!!)
                 oauth2LiveData.addSource(token, {
                     it!!
                     when (it.status) {
                         Resource.STATUS_SUCCESS -> {
                             oauth2LiveData.removeSource(token)
-                            startTokenInput.value = StartTokenInput(OAuth2Activity.REQUEST_TOKEN, it.data!!, bundle!!.getString(EXTRA_CLIENT_ID))
+                            startTokenInput.value = StartTokenInput(OAuth2Activity.REQUEST_TOKEN, it.data!!.accessToken!!, bundle!!.getString(EXTRA_CLIENT_ID))
                         }
                         Resource.STATUS_ERROR -> {
                             oauth2LiveData.removeSource(token)
@@ -152,7 +153,7 @@ class OAuth2ViewModel : ViewModel() {
                 })
             } else {
                 // Login Data
-                finishWithLocalData()
+                querySaveAndFinish(repository.oid!!)
             }
         }
     }
@@ -163,21 +164,45 @@ class OAuth2ViewModel : ViewModel() {
             startTokenInput.value = StartTokenInput(OAuth2Activity.REQUEST_TOKEN, loginResponseBean.accessToken, bundle!!.getString(EXTRA_CLIENT_ID))
         } else {
             // Login Data
-            finishWithLocalData()
+            fetchSaveAndFinish(true, loginResponseBean.accessToken, loginResponseBean.refreshToken)
         }
     }
 
     fun setTokenResponseBean(tokenResponseBean: TokenResponseBean) {
-        val allInfo = repository.getAllInfo(tokenResponseBean.accessToken, tokenResponseBean.refreshToken)
-        oauth2LiveData.addSource(allInfo, {
+        fetchSaveAndFinish(false, tokenResponseBean.accessToken, tokenResponseBean.refreshToken)
+    }
+
+    fun fetchSaveAndFinish(changeOid: Boolean, accessToken: String, refreshToken: String) {
+        val fetchLiveData = repository.getAllInfo(accessToken, refreshToken)
+        oauth2LiveData.addSource(fetchLiveData, {
             it!!
             when (it.status) {
                 Resource.STATUS_SUCCESS -> {
-                    oauth2LiveData.removeSource(allInfo)
-                    oauth2LiveData.value = Resource.success(it.data)
+                    oauth2LiveData.removeSource(fetchLiveData)
+
+                    val saveLiveData = repository.saveOAuth2Data(it.data!!)
+                    oauth2LiveData.addSource(saveLiveData, {
+                        it!!
+                        when (it.status) {
+                            Resource.STATUS_SUCCESS -> {
+                                oauth2LiveData.removeSource(saveLiveData)
+                                if (changeOid) {
+                                    repository.oid = it.data!!.oid
+                                }
+                                oauth2LiveData.value = Resource.success(it.data)
+                            }
+                            Resource.STATUS_ERROR -> {
+                                oauth2LiveData.removeSource(saveLiveData)
+                                oauth2LiveData.value = Resource.fail(it.err)
+                            }
+                            Resource.STATUS_LOADING -> {
+                                oauth2LiveData.value = Resource.loading(it.loading)
+                            }
+                        }
+                    })
                 }
                 Resource.STATUS_ERROR -> {
-                    oauth2LiveData.removeSource(allInfo)
+                    oauth2LiveData.removeSource(fetchLiveData)
                     oauth2LiveData.value = Resource.fail(it.err)
                 }
                 Resource.STATUS_LOADING -> {
@@ -187,52 +212,49 @@ class OAuth2ViewModel : ViewModel() {
         })
     }
 
-    fun query(oid: String): MutableLiveData<Resource<OAuth2ViewData>> {
-        val oauth2ViewDataLiveData = MutableLiveData<Resource<OAuth2ViewData>>()
-
-        val oauth2 = repository.database.oauth2Dao().query(oid)
-        val user = Transformations.switchMap(oauth2, {
-            repository.database.userDao().query(oauth2.value!!.user_name!!)
-        })!!
-        val app = Transformations.switchMap(oauth2, {
-            repository.database.appDao().query(oauth2.value!!.app_name!!)
-        })!!
-
-        val observer = { oid: String, oauth2: LiveData<OAuth2>, user: LiveData<User>, app: LiveData<App> ->
-            if (user.value != null && app.value != null) {
-                oauth2ViewDataLiveData.value = Resource.success(OAuth2ViewData(user.value!!.name!!, app.value!!.name!!, oid, oauth2.value!!.accessToken!!, oauth2.value!!.refreshToken!!))
-            }
-        }
-        val foo = MediatorLiveData<OAuth2>()
-        foo.addSource(user, {
-            foo.removeSource(user)
-            observer(oid, oauth2, user, app)
-        })
-        foo.addSource(app, {
-            foo.removeSource(app)
-            observer(oid, oauth2, user, app)
-        })
-
-        return oauth2ViewDataLiveData
-    }
-
-    fun finishWithLocalData() {
-        val foo = MediatorLiveData<Resource<OAuth2ViewData>>()
-        val oauth2ViewData = query(repository.preference.oid!!)
-        foo.addSource(oauth2ViewData, {
-            it!!
-            when (it.status) {
+    fun querySaveAndFinish(oid: String) {
+        val tokenLiveData = repository.token(oid)
+        oauth2LiveData.addSource(tokenLiveData, { token ->
+            token!!
+            when (token.status) {
                 Resource.STATUS_SUCCESS -> {
-                    foo.removeSource(oauth2ViewData)
-                    it.data!!
-                    oauth2LiveData.value = Resource.success(OAuth2ViewData(it.data.username, it.data.appName, it.data.oid, it.data.accessToken, it.data.refreshToken))
+                    oauth2LiveData.removeSource(tokenLiveData)
+                    token.data!!
+                    val userLiveData = repository.user(token.data.accessToken)
+                    val appLiveData = repository.app(token.data.accessToken)
+
+                    val joinObserver = { resource: Resource<Any>? ->
+                        resource!!
+                        when (resource.status) {
+                            Resource.STATUS_SUCCESS -> {
+                                if (userLiveData.value?.status == Resource.STATUS_SUCCESS && appLiveData.value?.status == Resource.STATUS_SUCCESS) {
+                                    oauth2LiveData.removeSource(userLiveData)
+                                    oauth2LiveData.removeSource(appLiveData)
+                                    oauth2LiveData.value = Resource.success(OAuth2ViewData(appLiveData.value!!.data!!.name, appLiveData.value!!.data!!.name, oid, tokenLiveData.value!!.data!!.accessToken, tokenLiveData.value!!.data!!.refreshToken))
+                                }
+                            }
+                            Resource.STATUS_ERROR -> {
+                                oauth2LiveData.removeSource(userLiveData)
+                                oauth2LiveData.removeSource(appLiveData)
+                            }
+                            Resource.STATUS_LOADING -> {
+                                oauth2LiveData.value = Resource.loading(resource.loading)
+                            }
+                        }
+                    }
+                    oauth2LiveData.addSource(userLiveData, {
+                        joinObserver(it)
+                    })
+                    oauth2LiveData.addSource(appLiveData, {
+                        joinObserver(it)
+                    })
                 }
                 Resource.STATUS_ERROR -> {
-                    foo.removeSource(oauth2ViewData)
-                    oauth2LiveData.value = Resource.fail(it.err)
+                    oauth2LiveData.removeSource(tokenLiveData)
+                    oauth2LiveData.value = Resource.fail(token.err)
                 }
                 Resource.STATUS_LOADING -> {
-                    oauth2LiveData.value = Resource.loading(it.loading)
+                    oauth2LiveData.value = Resource.loading(token.loading)
                 }
             }
         })
@@ -240,18 +262,6 @@ class OAuth2ViewModel : ViewModel() {
 }
 
 class OAuth2Repository(val preference: Preference, val database: Database, val network: Network) {
-
-    fun getToken(): LiveData<Resource<String>> {
-        return object : ResourceFetcher<String>("database: token") {
-            override fun disk(): LiveData<String> {
-                return Transformations.map(database.oauth2Dao().query(preference.oid!!), { oAuth2 ->
-                    oAuth2.accessToken
-                })
-            }
-        }
-                .fetch()
-                .asLiveData()
-    }
 
     fun getAllInfo(token: String, refreshToken: String): LiveData<Resource<OAuth2ViewData>> {
         val userLiveData = user(token)
@@ -265,7 +275,7 @@ class OAuth2Repository(val preference: Preference, val database: Database, val n
                     val appValue = appLiveData.value!!
                     if (userValue.status == Resource.STATUS_SUCCESS
                             && appValue.status == Resource.STATUS_SUCCESS) {
-                        foo.value = Resource.success(OAuth2ViewData(userValue.data!!.name, appValue.data!!.name, userValue.data!!.oid, token, refreshToken))
+                        foo.value = Resource.success(OAuth2ViewData(userValue.data!!.name, appValue.data!!.name, userValue.data.oid, token, refreshToken))
                     }
                 }
                 Resource.STATUS_ERROR -> {
@@ -278,59 +288,102 @@ class OAuth2Repository(val preference: Preference, val database: Database, val n
                 }
             }
         }
-        foo.addSource(userLiveData, {
-            Log.e("aa", it.toString())
-        })
+        foo.addSource(userLiveData, observer)
         foo.addSource(appLiveData, observer)
-
         return foo
     }
 
-    fun user(token: String): LiveData<Resource<UserResponseBean>> {
-        return object : ResourceFetcher<UserResponseBean>("network: user") {
-            override fun network(): LiveData<MyResponse<UserResponseBean>> {
-                return network.user(token)
+    var oid
+        get() = preference.oid
+        set(value) {
+            preference.oid = value
+        }
+
+    fun token(oid: String): LiveData<Resource<TokenData>> {
+        return object : ResourceFetcher<TokenData>("database: token") {
+            override fun disk(): LiveData<TokenData> {
+                return Transformations.map(database.tokenDao().query(oid), {
+                    it!!
+                    return@map TokenData(it.oid!!, it.accessToken!!, it.refreshToken!!)
+                })
             }
         }
                 .fetch()
                 .asLiveData()
     }
 
-    fun app(token: String): LiveData<Resource<AppResponseBean>> {
-        return object : ResourceFetcher<AppResponseBean>("network: app") {
-            override fun network(): LiveData<MyResponse<AppResponseBean>> {
-                return network.app(token)
+    fun user(token: String): LiveData<Resource<UserData>> {
+        return object : ResourceFetcher<UserData>("network: user") {
+            override fun disk(): LiveData<UserData> {
+                return Transformations.switchMap(database.tokenDao().queryByToken(token), { token ->
+                    if (token == null) {
+                        val empty = MutableLiveData<UserData>()
+                        empty.value = null
+                        return@switchMap empty
+                    } else {
+                        return@switchMap Transformations.map(database.userDao().query(token.userId!!), { user ->
+                            user!!
+                            return@map UserData(token.oid!!, user.name!!)
+                        })
+                    }
+                })
+            }
+
+            override fun network(): LiveData<MyResponse<UserData>> {
+                return Transformations.map(network.user(token), {
+                    it!!
+                    it.body!!
+                    return@map MyResponse(it.code, it.headers, if (it.isSuccess()) UserData(it.body.oid, it.body.name) else null, it.err)
+                })
             }
         }
                 .fetch()
                 .asLiveData()
     }
-//
-//    fun saveOAuth2Data(oauth2Data: OAuth2Data): LiveData<OAuth2Data> {
-//        val liveData = MutableLiveData<OAuth2Data>()
-//        async(CommonPool) {
-//            database.beginTransaction()
-//            try {
-//                database.userDao().upsert(User(oauth2Data.username))
-//                database.appDao().upsert(App(oauth2Data.appName))
-//                database.oauth2Dao().upsert(OAuth2(
-//                        oauth2Data.username,
-//                        oauth2Data.appName,
-//                        oauth2Data.oid,
-//                        oauth2Data.accessToken,
-//                        oauth2Data.refreshToken
-//                ))
-//                database.setTransactionSuccessful()
-//                liveData.postValue(oauth2Data)
-//            } catch (e: Exception) {
-//                e.printStackTrace()
-//                liveData.postValue(null)
-//            } finally {
-//                database.endTransaction()
-//            }
-//        }
-//        return liveData
-//    }
+
+    fun app(token: String): LiveData<Resource<AppData>> {
+        return object : ResourceFetcher<AppData>("network: app") {
+            override fun network(): LiveData<MyResponse<AppData>> {
+                return Transformations.map(network.app(token), {
+                    it!!
+                    it.body!!
+                    return@map MyResponse(it.code, it.headers, if (it.isSuccess()) AppData(it.body.oid, it.body.name) else null, it.err)
+                })
+            }
+        }
+                .fetch()
+                .asLiveData()
+    }
+
+    fun saveOAuth2Data(oauth2Data: OAuth2ViewData): LiveData<Resource<OAuth2ViewData>> {
+        val liveData = MutableLiveData<Resource<OAuth2ViewData>>()
+        async(CommonPool) {
+            Thread.sleep(2000)          // DEBUG
+            liveData.postValue(Resource.loading("disk: save"))
+            database.beginTransaction()
+            try {
+                val token = database.tokenDao().querySync(oauth2Data.oid)
+                val userId = database.userDao().upsertSync(User(token?.userId, oauth2Data.username))
+                val appId = database.appDao().upsertSync(App(token?.appId, oauth2Data.appName))
+                database.tokenDao().upsertSync(Token(
+                        oauth2Data.oid,
+                        userId,
+                        appId,
+                        oauth2Data.accessToken,
+                        oauth2Data.refreshToken
+                ))
+                database.setTransactionSuccessful()
+
+                liveData.postValue(Resource.success(oauth2Data))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                liveData.postValue(Resource.fail(e.message))
+            } finally {
+                database.endTransaction()
+            }
+        }
+        return liveData
+    }
 }
 
 data class StartLoginInput(val requestId: Int)
@@ -340,16 +393,14 @@ data class StartTokenInput(
         val clientId: String
 )
 
+data class UserData(val oid: String, val name: String)
+data class AppData(val oid: String, val name: String)
+data class TokenData(val oid: String, val accessToken: String, val refreshToken: String)
+
 data class OAuth2ViewData(
         var username: String,
         var appName: String,
         var oid: String,
         var accessToken: String,
         var refreshToken: String
-)
-
-data class FetchUserInput(
-        val accessToken: String,
-        val refreshToken: String,
-        val savePrefs: Boolean
 )

@@ -41,7 +41,7 @@ dependencies {
         exclude group: 'com.google.android', module: 'android'
     }
 
-    compile 'com.walfud:walle:2.0.2'
+    compile 'com.walfud:walle:3.0.0'
     compile 'com.google.dagger:dagger:2.9'
     kapt 'com.google.dagger:dagger-compiler:2.9'
 }

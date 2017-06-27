@@ -28,7 +28,7 @@ class LiveDataCallAdapterFactory : CallAdapter.Factory() {
             val bodyType = CallAdapter.Factory.getParameterUpperBound(0, responseType as ParameterizedType)
             return LiveDataCallAdapter<Type>(bodyType)
         } catch (e: Exception) {
-            throw IllegalArgumentException("interface return type MUST be `LiveData<Response<...>>`")
+            throw IllegalArgumentException("interface return type MUST be `LiveData<MyResponse<...>>`")
         }
     }
 }

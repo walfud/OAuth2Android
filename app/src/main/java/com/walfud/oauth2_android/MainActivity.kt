@@ -1,11 +1,15 @@
 package com.walfud.oauth2_android
 
 import android.app.Activity
+import android.arch.lifecycle.MutableLiveData
+import android.arch.lifecycle.Observer
 import android.content.Intent
 import android.os.Bundle
 import android.widget.TextView
 import com.walfud.oauth2_android.dagger2.DaggerMainComponent
 import com.walfud.oauth2_android.dagger2.MainModule
+import kotlinx.coroutines.experimental.CommonPool
+import kotlinx.coroutines.experimental.async
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
 import javax.inject.Inject
@@ -20,14 +24,12 @@ val REQUEST_TEST_OAUTH2 = 10
 
 class MainActivity : BaseActivity() {
 
+    val show = MutableLiveData<ShowData>()
     lateinit var usernameTv: TextView
     lateinit var appNameTv: TextView
     lateinit var oidTv: TextView
     lateinit var accessTokenTv: TextView
     lateinit var refreshTokenTv: TextView
-
-    var oid: String? = null
-    var accessToken: String? = null
 
     @Inject lateinit var preference: Preference
     @Inject lateinit var database: Database
@@ -41,6 +43,16 @@ class MainActivity : BaseActivity() {
                 .applicationComponent((application as OAuth2Application).component)
                 .mainModule(MainModule(this))
                 .build()
+                .inject(this)
+
+        show.observe(this, Observer {
+            it!!
+            usernameTv.text = it.username
+            appNameTv.text = it.appName
+            oidTv.text = it.oid
+            accessTokenTv.text = it.accessToken
+            refreshTokenTv.text = it.refreshToken
+        })
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -55,14 +67,60 @@ class MainActivity : BaseActivity() {
         when (requestCode) {
             REQUEST_TEST_LOGIN -> {
                 val loginResponseBean = data.getSerializableExtra(EXTRA_LOGIN_RESPONSE_BEAN) as LoginResponseBean
-                accessToken = loginResponseBean.accessToken
+                network.user(loginResponseBean.accessToken).observe(this, Observer { userResponse ->
+                    userResponse!!
+                    if (userResponse.isSuccess()) {
+                        userResponse.body!!
+                        network.user(loginResponseBean.accessToken).observe(this, Observer { appResponse ->
+                            appResponse!!
+                            if (appResponse.isSuccess()) {
+                                appResponse.body!!
+                                save(userResponse.body.oid, userResponse.body.name, appResponse.body.name, loginResponseBean.accessToken, loginResponseBean.refreshToken)
+                                preference.oid = userResponse.body.oid
+                                show.postValue(ShowData(userResponse.body.oid, userResponse.body.name, appResponse.body.name, loginResponseBean.accessToken, loginResponseBean.refreshToken))
+                            }
+                        })
+                    }
+                })
             }
             REQUEST_TEST_OAUTH2 -> {
-                usernameTv.text = data.getStringExtra(EXTRA_USERNAME)
-                appNameTv.text = data.getStringExtra(EXTRA_APPNAME)
-                oidTv.text = data.getStringExtra(EXTRA_OID)
-                accessTokenTv.text = data.getStringExtra(EXTRA_ACCESS_TOKEN)
-                refreshTokenTv.text = data.getStringExtra(EXTRA_REFRESH_TOKEN)
+                save(
+                        data.getStringExtra(EXTRA_OID),
+                        data.getStringExtra(EXTRA_USERNAME),
+                        data.getStringExtra(EXTRA_APPNAME),
+                        data.getStringExtra(EXTRA_ACCESS_TOKEN),
+                        data.getStringExtra(EXTRA_REFRESH_TOKEN)
+                )
+                show.value = ShowData(
+                        data.getStringExtra(EXTRA_OID),
+                        data.getStringExtra(EXTRA_USERNAME),
+                        data.getStringExtra(EXTRA_APPNAME),
+                        data.getStringExtra(EXTRA_ACCESS_TOKEN),
+                        data.getStringExtra(EXTRA_REFRESH_TOKEN)
+                )
+            }
+        }
+    }
+
+    fun save(oid: String, username: String, appName: String, accessToken: String, refreshToken: String) {
+        async(CommonPool) {
+            database.beginTransaction()
+            try {
+                val token = database.tokenDao().querySync(oid)
+                val userId = database.userDao().upsertSync(User(token?.userId, username))
+                val appId = database.appDao().upsertSync(App(token?.appId, appName))
+                database.tokenDao().upsertSync(Token(
+                        oid,
+                        userId,
+                        appId,
+                        accessToken,
+                        refreshToken
+                ))
+                database.setTransactionSuccessful()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                database.endTransaction()
             }
         }
     }
@@ -73,7 +131,7 @@ class MainActivityUI : AnkoComponent<MainActivity> {
         verticalLayout {
             button("Test Logout") {
                 onClick {
-                    Preference(owner).oid = null
+                    owner.preference.oid = null
                     toast("Logout Success")
                 }
             }
@@ -84,14 +142,22 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             }
             button("Test Token") {
                 onClick {
-                    if (owner.accessToken == null) {
+                    if (owner.preference.oid == null) {
                         toast("Please Login First")
                     } else {
-                        TokenActivity.startActivityForResult(owner, REQUEST_TEST_TOKEN, owner.accessToken!!, "contactsync")
+                        owner.database.tokenDao().query(owner.preference.oid!!).observe(owner, Observer { token ->
+                            token!!
+                            TokenActivity.startActivityForResult(owner, REQUEST_TEST_TOKEN, token.accessToken!!, "contactsync")
+                        })
                     }
                 }
             }
-            button("Test OAuth2") {
+            button("Test OAuth2 Login") {
+                onClick {
+                    startOAuth2ActivityForResult(owner, REQUEST_TEST_OAUTH2)
+                }
+            }
+            button("Test OAuth2 Login & Token") {
                 onClick {
                     startOAuth2ActivityForResult(owner, REQUEST_TEST_OAUTH2, "contactsync")
                 }
@@ -105,3 +171,11 @@ class MainActivityUI : AnkoComponent<MainActivity> {
         }
     }
 }
+
+data class ShowData(
+        var oid: String,
+        var username: String,
+        var appName: String,
+        var accessToken: String,
+        var refreshToken: String
+)

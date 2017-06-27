@@ -11,71 +11,77 @@ import android.arch.persistence.room.*
 @android.arch.persistence.room.Database(entities = arrayOf(
         User::class,
         App::class,
-        OAuth2::class
+        Token::class
 ), version = 1)
 abstract class Database : RoomDatabase() {
-    abstract fun userDao(): UserDao
-    abstract fun appDao(): AppDao
-    abstract fun oauth2Dao(): OAuth2Dao
+    abstract fun userDao(): UsersDao
+    abstract fun appDao(): AppsDao
+    abstract fun tokenDao(): Tokens2Dao
 }
 
 /////////// DAO
 @Dao
-interface UserDao {
+interface UsersDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun upsert(user: User)
+    fun upsertSync(user: User): Long
 
-    @Query("SELECT * FROM user WHERE name=:arg0")
-    fun query(username: String): LiveData<User>
+    @Query("SELECT * FROM Users WHERE id=:arg0")
+    fun query(id: Long): LiveData<User>
 }
 
 @Dao
-interface AppDao {
+interface AppsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun upsert(app: App)
+    fun upsertSync(app: App): Long
 
-    @Query("SELECT * FROM app WHERE name=:arg0")
-    fun query(appName: String): LiveData<App>
+    @Query("SELECT * FROM Apps WHERE id=:arg0")
+    fun query(id: Long): LiveData<App>
 }
 
 @Dao
-interface OAuth2Dao {
+interface Tokens2Dao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun upsert(oauth2: OAuth2)
+    fun upsertSync(token: Token): Long
 
-    @Query("SELECT * FROM oauth2 WHERE user_name=:arg0 AND app_name=:arg1")
-    fun query(username: String, appName: String): LiveData<OAuth2>
+    @Query("SELECT * FROM Tokens WHERE userId=:arg0 AND appId=:arg1")
+    fun query(userId: Long, appId: Long): LiveData<Token>
 
-    @Query("SELECT * FROM oauth2 WHERE oid=:arg0")
-    fun query(oid: String): LiveData<OAuth2>
+    @Query("SELECT * FROM Tokens WHERE oid=:arg0")
+    fun query(oid: String): LiveData<Token>
 
-    @Query("SELECT * FROM oauth2 WHERE oid=:arg0")
-    fun querySync(oid: String): OAuth2
+    @Query("SELECT * FROM Tokens WHERE accessToken=:arg0")
+    fun queryByToken(token: String): LiveData<Token>
+
+    @Query("SELECT * FROM Tokens WHERE oid=:arg0")
+    fun querySync(oid: String): Token?
 }
 
 ////////// Entity
-@Entity
+@Entity(tableName = "Users")
 data class User(
         @PrimaryKey
+        var id: Long? = null,
         var name: String? = null
 )
 
-@Entity
+@Entity(tableName = "Apps")
 data class App(
-    @PrimaryKey
-    var name: String? = null
+        @PrimaryKey
+        var id: Long? = null,
+        var name: String? = null
 )
 
-@Entity(foreignKeys = arrayOf(
-        ForeignKey(entity = User::class, parentColumns = arrayOf("name"), childColumns = arrayOf("user_name")),
-        ForeignKey(entity = App::class, parentColumns = arrayOf("name"), childColumns = arrayOf("app_name"))
-))
-data class OAuth2(
-    var user_name: String? = null,
-    var app_name: String? = null,
+@Entity(tableName = "Tokens",
+        foreignKeys = arrayOf(
+                ForeignKey(entity = User::class, parentColumns = arrayOf("id"), childColumns = arrayOf("userId")),
+                ForeignKey(entity = App::class, parentColumns = arrayOf("id"), childColumns = arrayOf("appId"))
+        ))
+data class Token(
+        @PrimaryKey
+        var oid: String? = null,
+        var userId: Long? = null,
+        var appId: Long? = null,
 
-    @PrimaryKey
-    var oid: String? = null,
-    var accessToken: String? = null,
-    var refreshToken: String? = null
+        var accessToken: String? = null,
+        var refreshToken: String? = null
 )
