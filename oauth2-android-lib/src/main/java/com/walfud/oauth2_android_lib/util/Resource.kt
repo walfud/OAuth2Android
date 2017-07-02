@@ -1,10 +1,10 @@
-package com.walfud.oauth2_android
+package com.walfud.oauth2_android_lib.util
 
 /**
  * Created by walfud on 2017/6/15.
  */
 
-class Resource<out T>(val status: Int = STATUS_DEFAULT, val data: T? = null, val err: String? = null, val loading: String? = null) {
+class Resource<out T>(val status: Int = Resource.STATUS_DEFAULT, val data: T? = null, val err: String? = null, val loading: String? = null) {
     companion object {
         val STATUS_DEFAULT = 0
         val STATUS_SUCCESS = 1

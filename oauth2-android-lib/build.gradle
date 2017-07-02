@@ -1,0 +1,55 @@
+plugins {
+    id "com.github.dcendents.android-maven" version "1.5"       // https://github.com/dcendents/android-maven-gradle-plugin
+    id "com.jfrog.bintray" version "1.7.3"                      // https://github.com/bintray/gradle-bintray-plugin
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+
+def config = rootProject.extensions.getByName("ext")
+
+android {
+    compileSdkVersion config.compileSdkVersion
+    buildToolsVersion config.buildToolsVersion
+
+    defaultConfig {
+        minSdkVersion config.minSdkVersion
+        targetSdkVersion config.targetSdkVersion
+        versionCode config.majorVersion * 100 + config.minorVersion * 10 + config.patchVersion
+        versionName config.majorVersion + "." + config.minorVersion + "." + config.patchVersion
+        multiDexEnabled true
+
+        consumerProguardFiles 'proguard-rules.pro'
+
+        ndk {
+            abiFilters 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64', 'mips', 'mips64'
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jre7:+"
+    compile 'com.android.support.constraint:constraint-layout:+'
+    compile 'android.arch.lifecycle:runtime:+'
+    compile 'android.arch.lifecycle:extensions:+'
+    kapt "android.arch.lifecycle:compiler:+"
+    compile 'android.arch.persistence.room:runtime:+'
+    kapt "android.arch.persistence.room:compiler:+"
+    compile("org.jetbrains.anko:anko:+") {
+        exclude group: 'com.google.android', module: 'android'
+    }
+    compile 'com.walfud:walle:3.0.0'
+}
+
+kotlin {
+    experimental {
+        coroutines "enable"
+    }
+}
+kapt {
+    generateStubs = true
+}
+
+apply from: '../jcenter.gradle'

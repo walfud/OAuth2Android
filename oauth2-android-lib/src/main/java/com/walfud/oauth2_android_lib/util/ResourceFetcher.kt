@@ -1,10 +1,8 @@
-package com.walfud.oauth2_android
+package com.walfud.oauth2_android_lib.util
 
 import android.arch.lifecycle.LiveData
 import android.arch.lifecycle.MediatorLiveData
 import android.arch.lifecycle.MutableLiveData
-import android.os.Handler
-import com.walfud.oauth2_android.retrofit2.MyResponse
 
 /**
  * Created by walfud on 2017/6/15.
@@ -59,16 +57,13 @@ abstract class ResourceFetcher<T>(val loadingMessage: String? = null) {
                         result.addSource(networkData, { myResponse ->
                             result.removeSource(networkData)
 
-                            Handler().postDelayed({
-                                // DEBUG
-                                myResponse!!
-                                if (myResponse.isSuccess()) {
-                                    val value = Resource.success(myResponse.body)
-                                    result.postValue(value)
-                                } else {
-                                    result.postValue(Resource.fail(myResponse.err))
-                                }
-                            }, 2000)
+                            myResponse!!
+                            if (myResponse.isSuccess()) {
+                                val value = Resource.success(myResponse.body)
+                                result.postValue(value)
+                            } else {
+                                result.postValue(Resource.fail(myResponse.err))
+                            }
                         })
                     }
                 })

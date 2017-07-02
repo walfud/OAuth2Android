@@ -1,9 +1,10 @@
-package com.walfud.oauth2_android
+package com.walfud.oauth2_android_lib.activity
 
 import android.arch.lifecycle.LifecycleActivity
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
+import com.walfud.oauth2_android_lib.EXTRA_ERROR
 import org.jetbrains.anko.AnkoLogger
 
 /**
@@ -11,10 +12,6 @@ import org.jetbrains.anko.AnkoLogger
  */
 
 open class BaseActivity : LifecycleActivity(), AnkoLogger {
-    companion object {
-        val EXTRA_ERROR: String = "EXTRA_ERROR"
-    }
-
     fun finish(err: String?, bundle: Bundle?) {
         val intent = Intent()
         if (!TextUtils.isEmpty(err)) {

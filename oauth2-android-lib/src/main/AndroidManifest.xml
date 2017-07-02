@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.walfud.oauth2_android_lib" >
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <activity
+            android:name="com.walfud.oauth2_android_lib.activity.OAuth2Activity"
+            android:exported="true" />
+        <activity android:name="com.walfud.oauth2_android_lib.activity.LoginActivity" />
+        <activity android:name="com.walfud.oauth2_android_lib.activity.AuthorizeActivity" />
+    </application>
+
+</manifest>
