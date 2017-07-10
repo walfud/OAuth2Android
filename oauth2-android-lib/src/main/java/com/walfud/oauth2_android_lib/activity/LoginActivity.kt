@@ -5,10 +5,11 @@ import android.app.Dialog
 import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import com.walfud.oauth2_android_lib.OAuth2
 import com.walfud.oauth2_android_lib.R
 import com.walfud.oauth2_android_lib.util.*
-import com.walfud.walle.md5
+import com.walfud.walle.lang.md5
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
 
@@ -60,8 +61,13 @@ class LoginActivity : BaseActivity() {
 class LoginActivityUI : AnkoComponent<LoginActivity> {
     override fun createView(ui: AnkoContext<LoginActivity>) = with(ui) {
         verticalLayout {
-            val usernameEt = editText()
-            val passwordEt = editText()
+            val usernameEt = editText {
+                singleLine = true
+            }
+            val passwordEt = editText {
+                singleLine = true
+                inputType = InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
             button(R.string.login_login) {
                 onClick {
                     val username = usernameEt.text.toString()
