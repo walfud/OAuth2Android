@@ -1,10 +1,9 @@
-package com.walfud.oauth2_android_lib.activity
+package com.walfud.oauth2_android.oauth2
 
 import android.arch.lifecycle.LifecycleActivity
 import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
-import com.walfud.oauth2_android_lib.EXTRA_ERROR
 import org.jetbrains.anko.AnkoLogger
 
 /**

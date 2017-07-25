@@ -1,4 +1,4 @@
-package com.walfud.oauth2_android_lib.activity
+package com.walfud.oauth2_android.oauth2
 
 import android.app.Activity
 import android.app.Dialog
@@ -6,12 +6,12 @@ import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
-import com.walfud.oauth2_android_lib.OAuth2
+import com.walfud.oauth2_android.*
 import com.walfud.oauth2_android_lib.R
-import com.walfud.oauth2_android_lib.util.*
 import com.walfud.walle.lang.md5
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
+import javax.inject.Inject
 
 val EXTRA_LOGIN_RESPONSE_BEAN = "EXTRA_LOGIN_RESPONSE_BEAN"
 
@@ -23,15 +23,13 @@ class LoginActivity : BaseActivity() {
         }
     }
 
-    lateinit var viewModel: LoginViewModel
+    @Inject lateinit var viewModel: LoginViewModel
     lateinit var dialog: Dialog
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         LoginActivityUI().setContentView(this)
 
-        viewModel = ViewModelProviders.of(this).get(LoginViewModel::class.java)
-        viewModel.repository = LoginRepository(OAuth2.network)
         dialog = Dialog(this)
 
         viewModel.loginLiveData.observe(this, Observer {

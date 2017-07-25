@@ -1,16 +1,15 @@
-package com.walfud.oauth2_android_lib.activity
+package com.walfud.oauth2_android.oauth2
 
 import android.app.Activity
 import android.app.Dialog
 import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
-import com.walfud.oauth2_android_lib.EXTRA_ACCESS_TOKEN
-import com.walfud.oauth2_android_lib.OAuth2
+import com.walfud.oauth2_android.*
 import com.walfud.oauth2_android_lib.R
-import com.walfud.oauth2_android_lib.util.*
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
+import javax.inject.Inject
 
 /**
  * Created by walfud on 22/05/2017.
@@ -30,15 +29,13 @@ class AuthorizeActivity : BaseActivity() {
         }
     }
 
-    lateinit var viewModel: AuthorizeViewModel
+    @Inject lateinit var viewModel: AuthorizeViewModel
     lateinit var dialog: Dialog
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthorizeActivityUI().setContentView(this)
 
-        viewModel = ViewModelProviders.of(this).get(AuthorizeViewModel::class.java)
-        viewModel.repository = AuthorizeRepository(OAuth2.network)
         dialog = Dialog(this)
 
         viewModel.authorizeLiveData.observe(this, Observer {

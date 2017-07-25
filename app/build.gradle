@@ -2,18 +2,16 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
-def config = rootProject.extensions.getByName("ext")
-
 android {
-    compileSdkVersion config.compileSdkVersion
-    buildToolsVersion config.buildToolsVersion
+    compileSdkVersion rootProject.compileSdkVersion
+    buildToolsVersion rootProject.buildToolsVersion
 
     defaultConfig {
         applicationId "com.walfud.walle"
-        minSdkVersion config.minSdkVersion
-        targetSdkVersion config.targetSdkVersion
-        versionCode config.majorVersion * 100 + config.minorVersion * 10 + config.patchVersion
-        versionName config.majorVersion + "." + config.minorVersion + "." + config.patchVersion
+        minSdkVersion rootProject.minSdkVersion
+        targetSdkVersion rootProject.targetSdkVersion
+        versionCode rootProject.versionCode
+        versionName rootProject.versionName
     }
     signingConfigs {
         release {
@@ -31,16 +29,23 @@ android {
             signingConfig signingConfigs.release
         }
     }
-
-    compileOptions {
-        targetCompatibility 1.8
-        sourceCompatibility 1.8
-    }
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation project(':oauth2-android-lib')
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jre7:+"
+    compile 'com.android.support.constraint:constraint-layout:+'
+    compile 'android.arch.lifecycle:runtime:+'
+    compile 'android.arch.lifecycle:extensions:+'
+    kapt "android.arch.lifecycle:compiler:+"
+    compile 'android.arch.persistence.room:runtime:+'
+    kapt "android.arch.persistence.room:compiler:+"
+    compile("org.jetbrains.anko:anko:+") {
+        exclude group: 'com.google.android', module: 'android'
+    }
+    kapt 'com.google.dagger:dagger-compiler:2.9'
+
+    implementation project(':library')
 }
 
 kotlin {

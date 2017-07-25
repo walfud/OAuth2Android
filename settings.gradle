@@ -1,1 +1,1 @@
-include ':app', ':oauth2-android-lib'
+include ':app', ':library'

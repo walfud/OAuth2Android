@@ -1,4 +1,4 @@
-package com.walfud.oauth2_android_lib.util
+package com.walfud.oauth2_android
 
 /**
  * Created by walfud on 2017/6/15.

@@ -8,9 +8,7 @@ import android.arch.persistence.room.Room
 import android.content.Intent
 import android.os.Bundle
 import android.widget.TextView
-import com.walfud.oauth2_android_lib.*
-import com.walfud.oauth2_android_lib.activity.AuthorizeActivity
-import com.walfud.oauth2_android_lib.activity.LoginActivity
+import com.walfud.oauth2_android.oauth2.*
 import org.jetbrains.anko.*
 import org.jetbrains.anko.sdk25.coroutines.onClick
 
@@ -147,7 +145,7 @@ class MainActivityUI : AnkoComponent<MainActivity> {
             }
             button("Test OAuth2 Login & Token") {
                 onClick {
-                    startOAuth2ForResult(owner, REQUEST_TEST_OAUTH2, "contactsync")
+                    startOAuth2ActivityForResult(owner, REQUEST_TEST_OAUTH2, "contactsync")
                 }
             }
 

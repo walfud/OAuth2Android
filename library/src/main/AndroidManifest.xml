@@ -4,10 +4,10 @@
 
     <application>
         <activity
-            android:name="com.walfud.oauth2_android_lib.activity.OAuth2Activity"
+            android:name="com.walfud.oauth2_android.oauth2.OAuth2Activity"
             android:exported="true" />
-        <activity android:name="com.walfud.oauth2_android_lib.activity.LoginActivity" />
-        <activity android:name="com.walfud.oauth2_android_lib.activity.AuthorizeActivity" />
+        <activity android:name="com.walfud.oauth2_android.oauth2.LoginActivity" />
+        <activity android:name="com.walfud.oauth2_android.oauth2.AuthorizeActivity" />
     </application>
 
 </manifest>

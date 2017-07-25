@@ -1,20 +1,27 @@
-package com.walfud.oauth2_android_lib.activity
+package com.walfud.oauth2_android.oauth2
 
 import android.app.Activity
 import android.app.Dialog
 import android.arch.lifecycle.*
 import android.content.Intent
 import android.os.Bundle
-import com.walfud.oauth2_android_lib.*
+import com.walfud.oauth2_android.*
 import com.walfud.oauth2_android_lib.R
-import com.walfud.oauth2_android_lib.util.*
 import org.jetbrains.anko.bundleOf
+import javax.inject.Inject
 
 /**
  * Created by walfud on 25/05/2017.
  */
 
-internal fun startOAuth2ActivityForResult(activity: Activity, requestId: Int, clientId: String?) {
+val EXTRA_ERROR = "EXTRA_ERROR"
+val EXTRA_USERNAME = "EXTRA_USERNAME"
+val EXTRA_APPNAME = "EXTRA_APPNAME"
+val EXTRA_OID = "EXTRA_OID"
+val EXTRA_ACCESS_TOKEN = "EXTRA_ACCESS_TOKEN"
+val EXTRA_REFRESH_TOKEN = "EXTRA_REFRESH_TOKEN"
+
+fun startOAuth2ActivityForResult(activity: Activity, requestId: Int, clientId: String?) {
     val intent = Intent(activity, OAuth2Activity::class.java)
     clientId?.let {
         intent.putExtra(EXTRA_CLIENT_ID, clientId)
@@ -28,14 +35,16 @@ class OAuth2Activity : BaseActivity() {
         val REQUEST_TOKEN = 2
     }
 
-    lateinit var viewModel: OAuth2ViewModel
+    @Inject lateinit var viewModel: OAuth2ViewModel
     lateinit var dialog: Dialog
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        viewModel = ViewModelProviders.of(this).get(OAuth2ViewModel::class.java)
-        viewModel.repository = OAuth2Repository(OAuth2.network)
+        DaggerActivityComponent.builder()
+                .applicationComponent(OAuth2Application.component)
+                .build()
+                .inject(this)
         dialog = Dialog(this)
 
         viewModel.loginInputLiveData.observe(this, Observer {
@@ -143,7 +152,7 @@ class OAuth2ViewModel : ViewModel() {
     }
 }
 
-class OAuth2Repository(val network: Network) {
+class OAuth2Repository(val preference: Preference, val database: Database, val network: Network) {
 
     fun getAllInfo(token: String, refreshToken: String): LiveData<Resource<OAuth2ViewData>> {
         val userLiveData = user(token)

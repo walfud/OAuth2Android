@@ -1,4 +1,4 @@
-package com.walfud.oauth2_android_lib.util
+package com.walfud.oauth2_android
 
 import android.arch.lifecycle.LiveData
 import android.arch.lifecycle.MediatorLiveData
