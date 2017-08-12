@@ -17,5 +17,11 @@ class OAuth2Application : Application() {
         component = DaggerApplicationComponent.builder()
                 .applicationModule(ApplicationModule(this))
                 .build()
+
+        try {
+            Thread.sleep(2000)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

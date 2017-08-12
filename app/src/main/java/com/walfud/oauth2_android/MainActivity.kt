@@ -34,6 +34,7 @@ class MainActivity : LifecycleActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setTheme(R.style.AppTheme)
         MainActivityUI().setContentView(this)
 
         show.observe(this, Observer {
